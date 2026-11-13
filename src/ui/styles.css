@@ -489,3 +489,4 @@ dialog.sheet form { overscroll-behavior: contain; max-height: 90vh; overflow-y: 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+.sh-head h2:focus { outline: none; } /* the title takes focus when a sheet opens, see openSheet */

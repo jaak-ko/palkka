@@ -30,6 +30,19 @@ export function openSheet(dlg) {
     if (!unlocked) { unlocked = true; unlockBody(); }
   });
   dlg.showModal();
+  // showModal() focuses the first field. On a phone that raises the keyboard over the sheet at once and
+  // gets in the way of swiping it away, so focus the title instead; people tap a field when they want to type.
+  const title = dlg.querySelector('.sh-head h2');
+  if (title) { title.tabIndex = -1; title.focus({ preventScroll: true }); } else document.activeElement?.blur?.();
+  // A sheet that does not scroll owns every vertical touch (so the browser never takes over mid-swipe);
+  // one that scrolls keeps native scrolling and is dragged from its header or when scrolled to the top.
+  const form = dlg.querySelector('form');
+  if (form) {
+    const sync = () => { form.style.touchAction = form.scrollHeight > form.clientHeight + 1 ? 'pan-y' : 'none'; };
+    sync();
+    requestAnimationFrame(sync);
+    dlg.addEventListener('input', sync);
+  }
 }
 
 // Closes with the slide-out (or fade on wide) first. Runs once; the close event then fires as usual.
@@ -89,6 +102,7 @@ function bindSwipe(dlg, form) {
       if (source === 'content' && form.scrollTop > 0) { y0 = null; return; } // the content is scrolling itself
       dragging = true;
       form.style.transition = 'none';
+      if (dlg.contains(document.activeElement)) document.activeElement.blur?.(); // lower the keyboard while dragging
     }
     if (ev.cancelable) ev.preventDefault(); // keeps the page behind from scrolling during the drag
     apply(Math.max(0, d));
@@ -145,7 +159,8 @@ export function countUps(root) {
 
 // ---------- entrance pass: runs only on the renders that ask for it (load, year and view changes) ----------
 export function enterPass(root) {
-  const cards = root.querySelectorAll('.hero, .tile, .split > .card, .slips');
+  // One rule for every block on every view (dashboard, Year page): cards, tiles, notices and hints, in page order.
+  const cards = root.querySelectorAll('.card, .tile, .warn, .hint, .notice-restore, .yactions');
   cards.forEach((el, i) => { el.classList.add('stagger'); el.style.setProperty('--i', i); });
   root.querySelectorAll('.slips .row').forEach((el, i) => el.style.setProperty('--i', i));
   root.querySelectorAll('.slips .chip').forEach((el, i) => el.style.setProperty('--i', i));
