@@ -7,14 +7,14 @@ import { addFiles } from './add-payslip.js';
 import { saveOpening } from './opening.js';
 import { openFixer } from './fixer.js';
 import { esc } from './format.js';
-import { enterPass, reducedMotion, openSheet, closeSheet, attachSheetMotion } from './motion.js';
+import { enterPass, reducedMotion, openSheet, closeSheet, attachSheetMotion, attachEdgeOpen } from './motion.js';
 import { noticeSignature, dismissNotice, showNoticeAgain } from './notice.js';
 
 const root = document.getElementById('app');
 const picker = document.getElementById('picker');
 const toastEl = document.getElementById('toast');
-const state = { year: null, selected: null, draft: null, view: 'dash', advice: null, through: 0 };
-// Entrance animations play only on the first render, and after a year or view change (see render()).
+const state = { year: null, selected: null, draft: null, advice: null, through: 0 };
+// Entrance animations play only on the first render and after a year change (see render()).
 let pendingAnimate = true;
 let store;
 
@@ -30,6 +30,7 @@ drawer.innerHTML = `<div class="drawer-panel">
   </div>`;
 document.body.append(drawer);
 attachSheetMotion(drawer);
+attachEdgeOpen(drawer); // swipe in from the left edge opens the drawer
 const drawerPicker = drawer.querySelector('.picker-drawer');
 
 function openDrawer() { if (!drawer.open) openSheet(drawer); }
@@ -95,10 +96,9 @@ async function render() {
       yearCounts: await yearCounts(list),
       selected: state.selected,
       hasOpening: !!stored,
-      view: state.view,
       advice: state.advice,
-      // The Year page uses the same derived opening as the dashboard, so the two pages agree.
-      summary: state.view === 'year' ? yearSummary(year, payslips, opening) : null,
+      // Year totals use the same derived opening as the dashboard, so the numbers agree.
+      summary: yearSummary(year, payslips, opening),
       partialNetTax: !!opening && (opening.net == null || opening.tax == null),
     });
     drawer.querySelector('.drawer-body').innerHTML = navHtml;
@@ -142,10 +142,6 @@ async function handleAction(el) {
     openDrawer();
   } else if (action === 'close-menu') {
     closeDrawer();
-  } else if (action === 'view') {
-    state.view = el.dataset.view;
-    pendingAnimate = true;
-    render();
   } else if (action === 'year') {
     state.year = Number(el.dataset.year);
     state.selected = null;

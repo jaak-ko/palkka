@@ -52,7 +52,7 @@ button { font: inherit; }
 /* ---------- shell ---------- */
 .shell { min-height: 100vh; }
 .side { display: none; }
-.main { padding: 16px 16px 120px; }
+.main { padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px calc(env(safe-area-inset-bottom, 0px) + 32px); }
 .main-inner { display: flex; flex-direction: column; gap: 12px; }
 
 /* header */
@@ -326,13 +326,8 @@ dialog.sheet form {
 .detail .lbl { margin: 6px 0 4px; }
 .detail-h { margin-top: 12px !important; }
 
-/* ---------- view switch ---------- */
-.seg-phone { position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; background: var(--tile); border-radius: 20px; padding: 3px; margin: 4px 0 6px; align-self: flex-start; }
-.seg-ind { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 17px; background: var(--card); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); transition: transform 320ms cubic-bezier(.2, .8, .2, 1); }
-.seg-phone button { position: relative; z-index: 1; border: 0; background: none; color: var(--sub); padding: 7px 18px; border-radius: 17px; font-size: 14px; cursor: pointer; }
-.seg-phone button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
+/* ---------- header pill ---------- */
 .pill-head { border: 0; cursor: pointer; font: inherit; }
-@media (min-width: 900px) { .seg-phone { display: none; } }
 
 /* ---------- tax card fixer ---------- */
 .fixer { gap: 14px !important; }
@@ -354,41 +349,33 @@ dialog.sheet form {
   background: var(--pill-bg); color: var(--pill-ink); text-decoration: none; font-weight: 600; font-size: 15px;
 }
 
-/* ---------- year page ---------- */
-.year-page { display: flex; flex-direction: column; gap: 10px; }
-.yhero { padding: 22px 20px; }
-.yhero-v { font-family: var(--serif); font-size: 44px; font-weight: 500; letter-spacing: -.02em; margin-top: 4px; }
-.ystats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.ystat { padding: 14px 16px; }
-.ystat-v { font-family: var(--serif); font-size: 22px; font-weight: 500; margin-top: 4px; }
-.ystat-v small, .ystat small { font-size: 13px; color: var(--sub); }
-.ystat-n { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.ynote { font-size: 13px; color: var(--sub); }
+/* ---------- year totals card (on the dashboard) ---------- */
 .linkish { background: none; border: 0; padding: 0; color: var(--blue); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
-.yactions { display: flex; justify-content: flex-end; }
 .btn-print {
   height: 40px; padding: 0 18px; border-radius: 20px; border: 1px solid var(--ghost-line); background: var(--card);
   color: var(--ink); font: inherit; font-size: 14px; cursor: pointer;
 }
-@media (min-width: 900px) {
-  .ystats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .yhero-v { font-size: 56px; }
-}
+.ytotals { display: flex; flex-direction: column; }
+.yt-row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--row); font-size: 14px; font-variant-numeric: tabular-nums; }
+.yt-row small { font-size: 12px; color: var(--muted); margin-left: 4px; }
+.yt-note { font-size: 13px; color: var(--sub); margin-top: 8px; }
+.ytotals .btn-print { margin-top: 12px; align-self: flex-start; }
+.yt-print-head { display: none; }
 
-/* Print: the year page on one clean sheet, no navigation or controls. */
+/* Print: only the Year totals card, on one clean sheet (everything else is hidden, not just the controls). */
 @media print {
   @page { margin: 14mm; }
-  html, body { background: #fff !important; color: #000 !important; }
-  .side, .add-bar, .toast, .seg-phone, .yarrows, .btn-print, .yactions, dialog, .pill-head { display: none !important; }
-  .shell { display: block !important; min-height: 0 !important; }
-  .main { padding: 0 !important; }
-  .main-inner { max-width: none !important; gap: 10px !important; }
-  .card, .ystat, .yhero { background: #fff !important; border: 1px solid #bbb !important; box-shadow: none !important; color: #000 !important; break-inside: avoid; }
-  .lbl, .ystat-n, .ystat small, .count { color: #444 !important; }
-  .ystats { grid-template-columns: 1fr 1fr !important; }
-  .year-page { gap: 8px !important; }
-  .h1 { font-size: 24px !important; }
-  .ynote { display: none; }
+  html, body { background: #fff !important; }
+  body * { visibility: hidden !important; }
+  .ytotals, .ytotals * { visibility: visible !important; }
+  .ytotals {
+    position: absolute; left: 0; top: 0; width: 100%; margin: 0 !important; padding: 0 !important;
+    background: #fff !important; border: 0 !important; box-shadow: none !important; color: #000 !important;
+  }
+  .ytotals .no-print, .ytotals .linkish, .ytotals .yt-note { display: none !important; }
+  .ytotals .yt-row { color: #000 !important; border-top-color: #ccc !important; }
+  .ytotals .card-h .sm { color: #444 !important; }
+  .yt-print-head { display: block !important; font: 600 18px var(--serif); margin: 0 0 10px; color: #000 !important; }
 }
 
 /* ---------- confirm sheet on wide: centred dialog ---------- */
@@ -399,7 +386,7 @@ dialog.sheet form {
 }
 
 /* ================= motion ================= */
-/* Entrance animations only under .enter (set by app.js on load and on year/view changes). `backwards` fill keeps
+/* Entrance animations only under .enter (set by app.js on load and on year changes). `backwards` fill keeps
    the final state natural, so :active scale and later renders are not affected. */
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes fade-up { from { opacity: 0; transform: translateY(10px); } }
@@ -507,7 +494,7 @@ dialog.drawer::backdrop { background: var(--scrim); opacity: var(--bd, 1); trans
 dialog.drawer[open]::backdrop { animation: bd-in 300ms ease-out backwards; }
 dialog.drawer.closing::backdrop { animation: bd-out 260ms ease-in forwards; }
 .drawer-panel {
-  height: 100%; display: flex; flex-direction: column; gap: 20px; padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+  height: 100%; display: flex; flex-direction: column; gap: 20px; padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px calc(20px + env(safe-area-inset-bottom, 0px));
   background: var(--side); border-radius: 0 24px 24px 0; border-right: 1px solid var(--line);
   overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
 }

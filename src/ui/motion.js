@@ -39,8 +39,11 @@ export function openSheet(dlg) {
   delete dlg.dataset.closing;
   dlg.classList.remove('closing');
   dlg.style.removeProperty('--bd');
-  const panel0 = panelOf(dlg);
-  if (panel0) { panel0.style.transform = ''; panel0.style.transition = ''; }
+  const panelNow2 = panelOf(dlg);
+  if (panelNow2) { panelNow2.style.transform = ''; panelNow2.style.transition = ''; }
+  // Each open starts with the entrance animation; the edge opening takes over the panel while it is dragged.
+  const panelNow = panelOf(dlg);
+  if (panelNow) panelNow.style.animation = '';
   lockBody();
   locked.add(dlg);
   dlg.addEventListener('close', () => endLock(dlg));
@@ -79,8 +82,7 @@ export function closeSheet(dlg, value = 'cancel') {
   setTimeout(finish, 450); // fallback if the animation did not run
 }
 
-// Gives a modal its gestures: backdrop tap, Escape, form submit (sheets), and swipe on phones: down for a sheet,
-// left for the drawer.
+// Gives a modal its gestures: backdrop tap, Escape, form submit (sheets), and the swipe (see attachSwipe).
 export function attachSheetMotion(dlg) {
   const panel = panelOf(dlg);
   dlg.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(dlg, 'cancel'); });
@@ -95,87 +97,151 @@ export function attachSheetMotion(dlg) {
   attachSwipe(dlg, panel, { axis: panel.matches('.drawer-panel') ? 'x' : 'y' });
 }
 
-// ---------- one swipe implementation for every modal ----------
-// axis 'y': a bottom sheet, dragged down (from its grabber and header, or from the content when scrolled to the top).
-// axis 'x': the left drawer, dragged left (from its title). Phone only; on wide screens nothing is dragged.
-// Closing direction is positive; release closes past 90 px or above 0.5 px/ms, otherwise snaps back.
+// ---------- one drag tracker for every modal gesture ----------
+// axis 'x' or 'y'. sign +1: moving the positive way is progress (down for a sheet, right for the edge opening);
+// sign -1: moving the other way is progress (left, to close the drawer). A drag is recognised after `from` px of
+// progress; on the x axis only when the move is more horizontal than vertical (so vertical scrolling stays native).
+export function makeDrag({ axis = 'y', sign = 1, from = 4, canRecognise = () => true, onFollow, onRelease }) {
+  const along = (x, y) => (axis === 'x' ? x : y);
+  let start = null;
+  let last = null;
+  let vel = 0;
+  let on = false;
+  let recognised = false;
+  return {
+    begin(x, y, t) {
+      start = { x, y }; last = { s: 0, t }; vel = 0; on = true; recognised = false;
+    },
+    move(x, y, t, ev) {
+      if (!on) return false;
+      const dx = x - start.x;
+      const dy = y - start.y;
+      const s = sign * (along(x, y) - along(start.x, start.y));
+      if (t > last.t) vel = (s - last.s) / (t - last.t); // velocity in the progress direction
+      last = { s, t };
+      if (!recognised) {
+        if (s < from) return false;
+        if ((axis === 'x' && Math.abs(dx) <= Math.abs(dy)) || !canRecognise(s)) { on = false; return false; }
+        recognised = true;
+      }
+      if (ev?.cancelable) ev.preventDefault(); // keeps the page behind from scrolling during the drag
+      onFollow(s);
+      return true;
+    },
+    end() {
+      if (!on) return;
+      on = false;
+      if (recognised) onRelease(last.s, vel);
+    },
+  };
+}
+
+// The sheets and the drawer (dragged closed). Handles: the grabber and header; a sheet also drags from its content
+// when scrolled to the top. Phone only; on wide screens nothing is dragged.
 export function attachSwipe(dlg, panel, { axis = 'y' } = {}) {
   const isX = axis === 'x';
   const handles = panel.querySelectorAll(isX ? '.drawer-head' : '.grab, .sh-head');
   const coord = (e) => (isX ? e.clientX : e.clientY);
   const touchCoord = (e) => (isX ? e.touches[0].clientX : e.touches[0].clientY);
-  let s0 = null; // start coordinate
-  let prev = null; // last sample {s, t}
-  let vel = 0;
-  let dragging = false;
   let source = null;
-  let shift = 0;
+  let dragging = false;
 
   const apply = (d) => {
-    shift = d;
     panel.style.transform = isX ? `translateX(${-d}px)` : `translateY(${d}px)`;
     dlg.style.setProperty('--bd', String(Math.max(0, 1 - d / (isX ? panel.offsetWidth : 320))));
   };
-  const begin = (c, t, src) => {
-    if (!phone() || dlg.dataset.closing) return;
-    s0 = c; prev = { s: 0, t }; vel = 0; dragging = false; source = src;
-  };
-  const move = (c, t, ev) => {
-    if (s0 == null) return;
-    const s = isX ? s0 - c : c - s0; // positive = towards closing
-    if (prev && t > prev.t) vel = (s - prev.s) / (t - prev.t);
-    prev = { s, t };
-    if (!dragging) {
-      if (s <= 4) return; // taps and moves away from the closing direction stay normal
-      if (source === 'content' && panel.scrollTop > 0) { s0 = null; return; } // the content is scrolling itself
-      dragging = true;
-      panel.style.transition = 'none';
-      if (dlg.contains(document.activeElement)) document.activeElement.blur?.(); // lower the keyboard while dragging
-    }
-    if (ev.cancelable) ev.preventDefault(); // keeps the page behind from scrolling during the drag
-    apply(Math.max(0, s));
-  };
-  const end = () => {
-    if (s0 == null) return;
-    const wasDragging = dragging;
-    s0 = null;
-    if (!wasDragging) return;
-    if (shift > 90 || vel > 0.5) {
-      if (dlg.dataset.closing) return;
-      dlg.dataset.closing = '1';
-      panel.style.transition = 'transform 220ms cubic-bezier(.4,0,1,1)';
-      apply(isX ? panel.offsetWidth : window.innerHeight);
-      setTimeout(() => { dlg.returnValue = 'cancel'; closeNow(dlg); }, 230);
-    } else {
-      panel.style.transition = 'transform 220ms cubic-bezier(.2,.8,.2,1)';
-      apply(0);
-      setTimeout(() => { panel.style.transition = ''; }, 240);
-    }
-  };
-
+  const drag = makeDrag({
+    axis, sign: isX ? -1 : 1, from: 4,
+    canRecognise: () => isX || !(source === 'content' && panel.scrollTop > 0), // a sheet's content may be scrolling itself
+    onFollow: (d) => {
+      if (!dragging) { dragging = true; panel.style.transition = 'none'; if (dlg.contains(document.activeElement)) document.activeElement.blur?.(); }
+      apply(Math.max(0, d));
+    },
+    onRelease: (d, v) => {
+      if (!dragging) return;
+      dragging = false;
+      if (d > 90 || v > 0.5) {
+        if (dlg.dataset.closing) return;
+        dlg.dataset.closing = '1';
+        panel.style.transition = 'transform 220ms cubic-bezier(.4,0,1,1)';
+        apply(isX ? panel.offsetWidth : window.innerHeight);
+        setTimeout(() => { dlg.returnValue = 'cancel'; closeNow(dlg); }, 230);
+      } else {
+        panel.style.transition = 'transform 220ms cubic-bezier(.2,.8,.2,1)';
+        apply(0);
+        setTimeout(() => { panel.style.transition = ''; }, 240);
+      }
+    },
+  });
+  const begin = (c, t, src) => { if (!phone() || dlg.dataset.closing) return; source = src; drag.begin(c.x, c.y, t); };
   handles.forEach((handle) => {
     handle.style.touchAction = 'none';
-    handle.addEventListener('pointerdown', (e) => { begin(coord(e), e.timeStamp, 'handle'); handle.setPointerCapture?.(e.pointerId); });
-    handle.addEventListener('pointermove', (e) => move(coord(e), e.timeStamp, e));
-    handle.addEventListener('pointerup', end);
-    handle.addEventListener('pointercancel', end);
+    handle.addEventListener('pointerdown', (e) => { begin({ x: e.clientX, y: e.clientY }, e.timeStamp, 'handle'); handle.setPointerCapture?.(e.pointerId); });
+    handle.addEventListener('pointermove', (e) => drag.move(e.clientX, e.clientY, e.timeStamp, e));
+    handle.addEventListener('pointerup', () => drag.end());
+    handle.addEventListener('pointercancel', () => drag.end());
   });
-  // Touch anywhere on the panel. The sheet only starts from the top of its scrolled content; the drawer only when the
-  // finger moves more sideways than up/down, so scrolling its list still works.
-  let cross0 = null; // start coordinate on the other axis
-  panel.addEventListener('touchstart', (e) => {
-    cross0 = isX ? e.touches[0].clientY : e.touches[0].clientX;
-    if (isX || panel.scrollTop <= 0) begin(touchCoord(e), e.timeStamp, 'content');
+  // Touch anywhere on the panel. A sheet starts only from the top of its scrolled content; the drawer from anywhere,
+  // because makeDrag only recognises it when the move is more sideways than vertical (its list still scrolls).
+  panel.addEventListener('touchstart', (e) => { if (isX || panel.scrollTop <= 0) begin({ x: e.touches[0].clientX, y: e.touches[0].clientY }, e.timeStamp, 'content'); }, { passive: true });
+  panel.addEventListener('touchmove', (e) => drag.move(e.touches[0].clientX, e.touches[0].clientY, e.timeStamp, e), { passive: false });
+  panel.addEventListener('touchend', () => drag.end());
+  panel.addEventListener('touchcancel', () => drag.end());
+}
+
+// Opens the drawer by dragging from the left edge: the panel follows the finger, then opens or springs back.
+// Phone only, and only while no other dialog is open. Vertical scrolling from the edge is left alone.
+export function attachEdgeOpen(drawer) {
+  const panel = drawer.querySelector('.drawer-panel');
+  const w = () => panel.offsetWidth;
+  const EDGE = 20; // px from the left edge where a touch may start
+  let touching = false;
+  const place = (x) => {
+    panel.style.transform = `translateX(${-w() + x}px)`;
+    drawer.style.setProperty('--bd', String(x / w()));
+  };
+  const settle = (x, transition, done) => {
+    panel.style.transition = transition;
+    panel.style.transform = x === null ? '' : `translateX(${x}px)`;
+    if (done) setTimeout(done, 240);
+  };
+  const drag = makeDrag({
+    axis: 'x', sign: 1, from: 8,
+    onFollow: (s) => {
+      if (!drawer.open) {
+        openSheet(drawer); // no entrance animation: the panel is placed by the finger
+        panel.style.animation = 'none';
+        panel.style.transition = 'none';
+      }
+      place(Math.min(w(), s));
+    },
+    onRelease: (s, v) => {
+      const open = s > 0.35 * w() || v > 0.5;
+      if (reducedMotion()) {
+        if (open) { panel.style.transform = 'translateX(0px)'; drawer.style.setProperty('--bd', '1'); } else closeNow(drawer);
+        return;
+      }
+      if (open) settle(0, 'transform 220ms cubic-bezier(.2,.8,.2,1)', () => { panel.style.transition = ''; drawer.style.setProperty('--bd', '1'); });
+      else settle(-w(), 'transform 220ms cubic-bezier(.4,0,1,1)', () => closeNow(drawer));
+    },
+  });
+  const anyModalOpen = () => !!document.querySelector('dialog[open]');
+  document.addEventListener('touchstart', (e) => {
+    touching = false;
+    if (!phone() || anyModalOpen() || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    if (t.clientX > EDGE) return;
+    touching = true;
+    drag.begin(t.clientX, t.clientY, e.timeStamp);
   }, { passive: true });
-  panel.addEventListener('touchmove', (e) => {
-    if (isX && s0 != null && !dragging) {
-      const cross = Math.abs(e.touches[0].clientY - cross0);
-      if (cross > 6 && cross > Math.abs(s0 - e.touches[0].clientX)) { s0 = null; return; } // a vertical scroll
-    }
-    move(touchCoord(e), e.timeStamp, e);
-  }, { passive: false });
-  panel.addEventListener('touchend', end);
-  panel.addEventListener('touchcancel', end);
+  document.addEventListener('touchmove', (e) => {
+    if (!touching) return;
+    const t = e.touches[0];
+    drag.move(t.clientX, t.clientY, e.timeStamp, e);
+  }, { passive: false }); // non-passive: preventDefault once the horizontal drag is recognised
+  const end = () => { if (touching) { touching = false; drag.end(); } };
+  document.addEventListener('touchend', end);
+  document.addEventListener('touchcancel', end);
 }
 
 // ---------- count-up: numbers grow to their formatted value; ends exactly on it ----------
@@ -197,9 +263,9 @@ export function countUps(root) {
   });
 }
 
-// ---------- entrance pass: runs only on the renders that ask for it (load, year and view changes) ----------
+// ---------- entrance pass: runs only on the renders that ask for it (load and year changes) ----------
 export function enterPass(root) {
-  // One rule for every block on every view (dashboard, Year page): cards, tiles, notices and hints, in page order.
+  // One rule for every block on the dashboard: cards, tiles, notices and hints, in page order.
   const cards = root.querySelectorAll('.card, .tile, .warn, .hint, .notice-restore, .yactions');
   cards.forEach((el, i) => { el.classList.add('stagger'); el.style.setProperty('--i', i); });
   root.querySelectorAll('.slips .row').forEach((el, i) => el.style.setProperty('--i', i));
