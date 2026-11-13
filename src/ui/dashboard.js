@@ -79,11 +79,13 @@ function yearTotalsHtml(year, s, through, partialNetTax) {
   </section>`;
 }
 
+// The two rates as one row of two centred columns: the current rate, and the next rate (above the limit).
+const RATE_UP = '<svg class="rate-up" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
 function ratesHtml(tc) {
   if (tc.basePct == null) return '';
   return `<div class="rates">
     <div class="rate"><p class="k">Current tax rate</p><p class="v">${fmtPct(tc.basePct)}</p></div>
-    <div class="rate"><p class="k">Next rate, above the limit</p><p class="v" style="color:var(--red)">${fmtPct(tc.extraPct)}</p></div>
+    <div class="rate rate-next"><p class="k">Next rate</p><p class="v">${fmtPct(tc.extraPct)}${RATE_UP}</p><p class="rate-sub">above your limit</p></div>
   </div>`;
 }
 
