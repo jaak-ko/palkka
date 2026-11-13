@@ -297,7 +297,6 @@ dialog.sheet form {
   .card-h h2 { font-size: 16px; }
   .where-card { display: flex; flex-direction: column; }
   .where-big { display: block; margin-top: 6px; font: 500 36px/1.1 var(--serif); letter-spacing: -.02em; }
-  .where-sub { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); }
   .where-card .stack { height: 16px; margin-top: 20px; }
   .where-card .legend2 { display: none; }
   .where-list { display: flex; flex-direction: column; margin-top: 16px; font-size: 14px; }

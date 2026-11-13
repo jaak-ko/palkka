@@ -202,7 +202,7 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
     const parts = [['var(--green)', 'To you', b.net], ['var(--amber)', 'Tax', b.tax], ['var(--purple)', 'Pension', b.pension], ['var(--grey)', 'Other', b.other]];
     where = `<section class="card where-card">
       <div class="card-h"><h2>Where ${MONTHS[shown.month - 1]} went</h2><span class="where-amt">${fmtEur(shown.gross)}</span></div>
-      <p class="where-big">${fmtEur(shown.gross)}</p><p class="where-sub">gross pay</p>
+      <p class="where-big">${fmtEur(shown.gross)}</p>
       <div class="stack">${parts.map(([c, , v]) => `<div style="width:${pct(v)}%;background:${c};border-radius:6px"></div>`).join('')}</div>
       <div class="legend2">${parts.map(([c, n, v]) => `<div><span class="l"><i class="dot" style="background:${c}"></i>${n}</span><span>${fmtPct(pct(v))}</span></div>`).join('')}</div>
       <div class="where-list">${parts.map(([c, n, v]) => `<div><span class="l"><i class="dot" style="background:${c}"></i>${n}</span><span><b>${fmtEur2(v)}</b><span class="p">${fmtPct(pct(v))}</span></span></div>`).join('')}</div>
