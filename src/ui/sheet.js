@@ -66,11 +66,16 @@ export function askFields({ title, subtitle = '', text = '', fields, save = 'Sav
     };
     Object.values(inputs).forEach((i) => i.addEventListener('input', update));
 
-    dlg.addEventListener('close', () => {
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
       const out = dlg.returnValue === 'ok' ? valuesNow() : null;
       dlg.remove();
       resolve(out);
-    });
+    };
+    dlg.addEventListener('close', settle);
+    dlg.addEventListener('palkka-closed', settle);
     document.body.append(dlg);
     attachSheetMotion(dlg);
     openSheet(dlg);

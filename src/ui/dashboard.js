@@ -12,6 +12,8 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
 const ICON = (d, w = 18) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const PLUS = ICON('<path d="M12 5v14M5 12h14"/>', 20);
 const WARN = ICON('<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/>');
+const TIP = `<p class="tip">Tip: open your payslip folder and tap Select All. Payslips you already added are skipped.</p>`;
+const MENU = ICON('<path d="M4 7h16M4 12h16M4 17h16"/>', 20);
 const CHEV_L = ICON('<path d="M15 18l-6-6 6-6"/>');
 const CHEV_R = ICON('<path d="M9 18l6-6-6-6"/>');
 const RING_ARC = 518.36; // 3/4 of the ring, the track length
@@ -36,16 +38,9 @@ export function renderDashboard(el, model, payslips = [], ui = {}) {
   const first = payslips[0];
   const through = opening?.month ?? (first ? first.month - 1 : 0);
   const idx = years.indexOf(year);
-  const addBtn = (cls) => `<button class="add ${cls}" type="button" data-action="add">${PLUS}Add payslip</button>`;
-  const viewBtn = (v, label) => `<button class="yr${view === v ? ' on' : ''}" type="button" data-action="view" data-view="${v}"${view === v ? ' aria-current="page"' : ''}><span>${label}</span></button>`;
 
-  const side = `<aside class="side" aria-label="Years and payslips">
-    <div class="brand"><div class="mark">p</div><span>palkka</span></div>
-    <div class="side-sec"><p>View</p>${viewBtn('dash', 'Dashboard')}${viewBtn('year', 'Year')}</div>
-    <div class="side-sec"><p>Year</p>${years.map((y) => `<button class="yr${y === year ? ' on' : ''}" type="button" data-action="year" data-year="${y}"><span>${y}</span>${counts[y] != null ? `<span class="c">${counts[y]}/12</span>` : ''}</button>`).join('')}</div>
-    <div class="side-sec"><p>Payslips</p><div class="slips-side">${latestPeriod ? listHtml(payslips, missingMonths, through, ui) : ''}</div></div>
-    <div class="side-foot">${addBtn('add-side')}</div>
-  </aside>`;
+  const navCtx = { years, counts, year, view, payslips, latestPeriod, missingMonths, through, ui };
+  const side = `<aside class="side nav" aria-label="Years and payslips">${navHtml({ ...navCtx, brand: true, addClass: 'add-side' })}</aside>`;
 
   const yearArrows = years.length > 1
     ? `<div class="yarrows"><button class="yarrow" type="button" data-action="year-step" data-step="-1" aria-label="Previous year"${idx <= 0 ? ' disabled' : ''}>${CHEV_L}</button><button class="yarrow" type="button" data-action="year-step" data-step="1" aria-label="Next year"${idx >= years.length - 1 ? ' disabled' : ''}>${CHEV_R}</button></div>`
@@ -55,20 +50,20 @@ export function renderDashboard(el, model, payslips = [], ui = {}) {
   const pill = latest && advice?.applicable && !dismissed
     ?`<button class="pill-head" type="button" data-action="fixer">${ICON('<path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/>', 14)}Tax card needs updating</button>`
     : '';
-  const segment = `<div class="segment seg-phone" role="group" aria-label="Screen"><span class="seg-ind" style="transform:translateX(${view === 'year' ? 100 : 0}%)"></span><button type="button" data-action="view" data-view="dash" aria-pressed="${view === 'dash'}">Dashboard</button><button type="button" data-action="view" data-view="year" aria-pressed="${view === 'year'}">Year</button></div>`;
-  const header = `<header class="top"><div>
+  const header = `<header class="top"><button class="menu-btn" type="button" data-action="menu" aria-label="Open menu">${MENU}</button><div>
       <p class="count">${monthsCovered} of ${monthsInYear} payslips${latest ? `<span class="wide-only"> · updated with ${MONTHS[latest.month - 1]}</span>` : ''}</p>
       <h1 class="h1">${view === 'year' ? `Year ${year}` : `Your ${year}`}</h1>
     </div>
     <div class="top-r">${yearArrows}${pill}</div></header>`;
 
   let body;
-  if (!latestPeriod) body = `<section class="card empty"><p>Add your first payslip to see your year.</p></section>`;
-  else if (view === 'year' && ui.summary) body = yearBody(year, ui.summary, through);
+  if (!latestPeriod) body = `<section class="card empty"><p>Add your first payslip to see your year.</p><button class="add add-empty" type="button" data-action="add">${PLUS}Add payslips</button>${TIP}</section>`;
+  else if (view === 'year' && ui.summary) body = yearBody(year, ui.summary, through, model, ui.partialNetTax);
   else body = mainBody({ model, payslips, ui, latest, opening, through, dismissed });
 
-  el.innerHTML = `<div class="shell">${side}<div class="main"><div class="main-inner">${header}${latestPeriod ? segment : ''}${body}</div></div></div>
-    <div class="add-bar">${addBtn('add-phone')}</div>`;
+  el.innerHTML = `<div class="shell">${side}<div class="main"><div class="main-inner">${header}${body}</div></div></div>`;
+  // The phone drawer shows the same navigation; the app puts it in the drawer.
+  return navHtml({ ...navCtx, brand: false, addClass: 'add-drawer', tip: true });
 }
 
 function ratesHtml(keep, tc) {
@@ -170,6 +165,16 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
 
   const slips = `<section class="card slips slips-main"><div class="card-h"><h2>Payslips</h2></div>${listHtml(payslips, model.missingMonths, through, ui)}</section>`;
   return `${hero}${tiles}<div class="split">${chart}${where}</div>${slips}`;
+}
+
+// The navigation shared by the Mac sidebar and the phone drawer: view, year, payslips, add.
+export function navHtml({ years, counts, year, view, payslips, latestPeriod, missingMonths, through, ui, brand, addClass, tip = false }) {
+  const viewBtn = (v, label) => `<button class="yr${view === v ? ' on' : ''}" type="button" data-action="view" data-view="${v}"${view === v ? ' aria-current="page"' : ''}><span>${label}</span></button>`;
+  return `${brand ? '<div class="brand"><div class="mark">p</div><span>palkka</span></div>' : ''}
+    <div class="side-sec"><p>View</p>${viewBtn('dash', 'Dashboard')}${viewBtn('year', 'Year')}</div>
+    <div class="side-sec"><p>Year</p>${years.map((y) => `<button class="yr${y === year ? ' on' : ''}" type="button" data-action="year" data-year="${y}"${y === year ? ' aria-current="true"' : ''}><span>${y}</span>${counts[y] != null ? `<span class="c">${counts[y]}/12</span>` : ''}</button>`).join('')}</div>
+    <div class="side-sec"><p>Payslips</p><div class="slips-side">${latestPeriod ? listHtml(payslips, missingMonths, through, ui) : ''}</div></div>
+    <div class="side-foot"><button class="add ${addClass}" type="button" data-action="add">${PLUS}Add payslips</button>${tip ? TIP : ''}</div>`;
 }
 
 // Payslip rows (newest first), a net-change chip on each row that has an earlier slip, missing months,

@@ -2,18 +2,20 @@
 import { fmtEur, fmtEur2, monthRange } from './format.js';
 
 // through: the last month covered by the opening balance (0 when none).
-export function yearBody(year, s, through = 0) {
+export function yearBody(year, s, through = 0, model, partialNetTax = false) {
+  // The dashboard's model gives the same months covered and the forecast, so both pages agree.
   const stat = (label, value, note = '') => `<section class="card ystat"><p class="lbl">${label}</p><p class="ystat-v">${value}</p>${note ? `<p class="ystat-n">${note}</p>` : ''}</section>`;
   const holiday = s.holidayDaysLeft == null ? '—' : `${s.holidayDaysLeft} <small>${s.holidayDaysLeft === 1 ? 'day' : 'days'}</small>`;
   return `<section class="year-page">
     <section class="card yhero">
       <p class="lbl">Taxable income ${year}</p>
       <p class="yhero-v">${fmtEur(s.taxable)}</p>
-      <p class="ystat-n">${s.monthsCovered} of 12 months covered</p>
+      <p class="ystat-n">${model.monthsCovered} of 12 months covered</p>
     </section>
     <div class="ystats">
-      ${stat('Net pay', fmtEur(s.net))}
-      ${stat('Tax withheld', fmtEur(s.tax))}
+      ${stat('Net pay', partialNetTax ? `${fmtEur(s.net)} <small>partial</small>` : fmtEur(s.net))}
+      ${stat('Tax withheld', partialNetTax ? `${fmtEur(s.tax)} <small>partial</small>` : fmtEur(s.tax))}
+      ${stat('Year-end forecast', fmtEur(model.yearEndForecastGross))}
       ${stat('Pension (TyEL)', s.tyelComplete ? fmtEur(s.tyel) : `${fmtEur(s.tyel)} <small>partial</small>`)}
       ${stat('Unemployment insurance', s.tyelComplete ? fmtEur2(s.unemployment) : `${fmtEur2(s.unemployment)} <small>partial</small>`)}
       ${stat('Phone benefit', fmtEur2(s.phoneBenefit))}

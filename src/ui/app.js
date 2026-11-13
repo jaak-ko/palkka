@@ -7,7 +7,7 @@ import { addFiles } from './add-payslip.js';
 import { saveOpening } from './opening.js';
 import { openFixer } from './fixer.js';
 import { esc } from './format.js';
-import { enterPass, reducedMotion } from './motion.js';
+import { enterPass, reducedMotion, openSheet, closeSheet, attachSheetMotion } from './motion.js';
 import { noticeSignature, dismissNotice, showNoticeAgain } from './notice.js';
 
 const root = document.getElementById('app');
@@ -16,8 +16,24 @@ const toastEl = document.getElementById('toast');
 const state = { year: null, selected: null, draft: null, view: 'dash', advice: null, through: 0 };
 // Entrance animations play only on the first render, and after a year or view change (see render()).
 let pendingAnimate = true;
-let prevView = null;
 let store;
+
+// The phone drawer: the same navigation as the Mac sidebar, in a modal dialog (focus stays inside, page locked).
+const drawer = document.createElement('dialog');
+drawer.className = 'drawer';
+drawer.setAttribute('aria-labelledby', 'drawer-title');
+drawer.innerHTML = `<div class="drawer-panel">
+    <div class="drawer-head"><h2 class="drawer-title" id="drawer-title" tabindex="-1">palkka</h2>
+      <button class="drawer-close" type="button" data-action="close-menu" aria-label="Close menu">×</button></div>
+    <div class="drawer-body nav"></div>
+    <input type="file" class="picker-drawer" accept=".pdf,.json,application/pdf,application/json" multiple hidden>
+  </div>`;
+document.body.append(drawer);
+attachSheetMotion(drawer);
+const drawerPicker = drawer.querySelector('.picker-drawer');
+
+function openDrawer() { if (!drawer.open) openSheet(drawer); }
+function closeDrawer() { closeSheet(drawer, 'cancel'); }
 
 function notify(msg) {
   toastEl.textContent = msg;
@@ -31,11 +47,25 @@ function notify(msg) {
   }, 4000);
 }
 
-// Months covered per year, for the "n/12" in the Mac sidebar.
+// The opening balance in effect for a year: the stored one (its gross follows the slips unless frozen), else an
+// in-memory one (never saved) covering the months before the first slip.
+function effectiveOpening(year, payslips, stored) {
+  const computed = computeOpeningGross(payslips, year);
+  const first = payslips[0];
+  if (stored) return { opening: stored.grossFrozen || computed == null ? stored : { ...stored, gross: computed }, draft: null };
+  if (computed != null && first && first.month > 1) {
+    const draft = { year, throughMonth: first.month - 1, gross: computed, net: null, tax: null, grossFrozen: false };
+    return { opening: draft, draft };
+  }
+  return { opening: null, draft: null };
+}
+
+// Months covered per year, for the "n/12" in the navigation (same opening as the dashboard, so they agree).
 async function yearCounts(years) {
   const counts = {};
   for (const y of years) {
-    const [slips, opening] = await Promise.all([store.listPayslips(y), store.getOpening(y)]);
+    const [slips, stored] = await Promise.all([store.listPayslips(y), store.getOpening(y)]);
+    const { opening } = effectiveOpening(y, slips, stored);
     const months = new Set(slips.map((p) => p.month));
     for (let m = 1; opening && m <= opening.throughMonth; m++) months.add(m);
     counts[y] = months.size;
@@ -52,42 +82,28 @@ async function render() {
     const year = state.year;
     const payslips = await store.listPayslips(year);
     const stored = await store.getOpening(year);
-    // Until the user freezes the gross, the opening balance follows the slips.
-    const computed = computeOpeningGross(payslips, year);
     const first = payslips[0];
-    let opening = !stored ? null : stored.grossFrozen || computed == null ? stored : { ...stored, gross: computed };
-    // No stored opening: an in-memory one (never saved) so the chart still covers the months before the first slip.
-    state.draft = null;
-    if (!stored && computed != null && first && first.month > 1) {
-      opening = { year, throughMonth: first.month - 1, gross: computed, net: null, tax: null, grossFrozen: false };
-      state.draft = opening;
-    }
+    const { opening, draft } = effectiveOpening(year, payslips, stored);
+    state.draft = draft;
     const model = buildDashboard(year, payslips, opening);
     state.advice = taxCardAdvice({ year, payslips, opening });
     state.latestSlip = payslips.at(-1) ?? null; // store order is ascending, so the last one is the latest
     state.through = opening ? opening.throughMonth : (first ? first.month - 1 : 0);
     const list = years.length ? years : [year];
-    renderDashboard(root, model, payslips, {
+    const navHtml = renderDashboard(root, model, payslips, {
       years: list,
       yearCounts: await yearCounts(list),
       selected: state.selected,
       hasOpening: !!stored,
       view: state.view,
       advice: state.advice,
-      summary: state.view === 'year' ? yearSummary(year, payslips, stored) : null,
+      // The Year page uses the same derived opening as the dashboard, so the two pages agree.
+      summary: state.view === 'year' ? yearSummary(year, payslips, opening) : null,
+      partialNetTax: !!opening && (opening.net == null || opening.tax == null),
     });
+    drawer.querySelector('.drawer-body').innerHTML = navHtml;
     root.classList.toggle('enter', animate);
     if (animate) enterPass(root);
-    // The Dashboard | Year indicator slides from the previous position.
-    const ind = root.querySelector('.seg-ind');
-    if (ind && prevView && prevView !== state.view) {
-      ind.style.transition = 'none';
-      ind.style.transform = `translateX(${prevView === 'year' ? 100 : 0}%)`;
-      void ind.offsetWidth;
-      ind.style.transition = '';
-      ind.style.transform = `translateX(${state.view === 'year' ? 100 : 0}%)`;
-    }
-    prevView = state.view;
   } catch (e) {
     root.innerHTML = `<div class="shell"><div class="main"><section class="card empty"><p>Could not open local storage: ${esc(e.message)}</p></section></div></div>`;
   }
@@ -106,12 +122,27 @@ async function openOpeningForm() {
   render();
 }
 
-root.addEventListener('click', async (e) => {
-  const el = e.target.closest('[data-action]');
-  if (!el) return;
+// Files chosen in either picker (the main one, or the one inside the drawer).
+async function handlePicked(input) {
+  const files = [...input.files];
+  input.value = '';
+  await addFiles(files, { store, notify });
+  render();
+}
+
+// One action handler for the page and the drawer.
+async function handleAction(el) {
   const action = el.dataset.action;
-  if (action === 'add') picker.click();
-  else if (action === 'view') {
+  const inDrawer = !!el.closest('dialog.drawer');
+  // Choosing anything in the drawer closes it, except Add payslip: its picker opens from inside the drawer.
+  if (inDrawer && action !== 'add') closeDrawer();
+  if (action === 'add') {
+    (inDrawer ? drawerPicker : picker).click();
+  } else if (action === 'menu') {
+    openDrawer();
+  } else if (action === 'close-menu') {
+    closeDrawer();
+  } else if (action === 'view') {
     state.view = el.dataset.view;
     pendingAnimate = true;
     render();
@@ -160,14 +191,18 @@ root.addEventListener('click', async (e) => {
     notify('Payslip deleted');
     render();
   }
-});
+}
 
-picker.addEventListener('change', async () => {
-  const files = [...picker.files];
-  picker.value = '';
-  await addFiles(files, { store, notify });
-  render();
+root.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (el) handleAction(el);
 });
+drawer.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (el) handleAction(el);
+});
+picker.addEventListener('change', () => handlePicked(picker));
+drawerPicker.addEventListener('change', () => { closeDrawer(); handlePicked(drawerPicker); });
 
 matchMedia('(min-width: 900px)').addEventListener('change', render); // chart geometry and layout differ per width
 
