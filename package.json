@@ -1,0 +1,11 @@
+{
+  "name": "palkka",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node --test"
+  },
+  "type": "module",
+  "devDependencies": {
+    "pdfjs-dist": "3.11.174"
+  }
+}

@@ -1,0 +1,6 @@
+# Real payslips contain personal ID and bank account: never commit
+fixtures/
+*.pdf
+palkka-*-opening.json
+.DS_Store
+node_modules/
