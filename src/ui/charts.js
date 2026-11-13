@@ -34,17 +34,17 @@ export function cumulativeChart(series, limit, wide = false) {
   const line = (key, color) => {
     let out = '';
     if (opening) {
-      out += `<polyline points="${X(0)},${base} ${pt(opening.month, opening[key])}" fill="none" style="stroke:${color}" stroke-width="2" stroke-dasharray="2 5" stroke-linecap="round"/>`;
+      out += `<polyline class="fade" points="${X(0)},${base} ${pt(opening.month, opening[key])}" fill="none" style="stroke:${color}" stroke-width="2" stroke-dasharray="2 5" stroke-linecap="round"/>`;
     }
-    out += `<polyline points="${actual.map((s) => pt(s.month, s[key])).join(' ')}" fill="none" style="stroke:${color}" stroke-width="2.5" stroke-linejoin="round"/>`;
+    out += `<polyline class="draw" pathLength="1" points="${actual.map((s) => pt(s.month, s[key])).join(' ')}" fill="none" style="stroke:${color}" stroke-width="2.5" stroke-linejoin="round"/>`;
     if (fc.length) {
-      out += `<polyline points="${[last, ...fc].map((s) => pt(s.month, s[key])).join(' ')}" fill="none" style="stroke:${color}" stroke-width="1.5" stroke-dasharray="1 5" stroke-linecap="round"/>`;
+      out += `<polyline class="fade" points="${[last, ...fc].map((s) => pt(s.month, s[key])).join(' ')}" fill="none" style="stroke:${color}" stroke-width="1.5" stroke-dasharray="1 5" stroke-linecap="round"/>`;
     }
     return out;
   };
 
   // Area under before-tax pay up to the last actual month.
-  const area = `<polygon points="${[`${X(0)},${base}`, ...actual.map((s) => pt(s.month, s.cumGross)), `${X(last.month)},${base}`].join(' ')}" style="fill:var(--blue)" fill-opacity=".1"/>`;
+  const area = `<polygon class="area" points="${[`${X(0)},${base}`, ...actual.map((s) => pt(s.month, s.cumGross)), `${X(last.month)},${base}`].join(' ')}" style="fill:var(--blue)" fill-opacity=".1"/>`;
 
   // Limit-crossing marker: where the before-tax line first passes the limit.
   const j = series.findIndex((s) => s.cumGross > limit);
@@ -55,7 +55,7 @@ export function cumulativeChart(series, limit, wide = false) {
     const f = (limit - prev.cumGross) / (cur.cumGross - prev.cumGross);
     const xm = prev.month + f * (cur.month - prev.month);
     const x = +(padL + (xm * (W - padL - padR)) / 12).toFixed(1);
-    crossing = `<circle cx="${x}" cy="${limY}" r="4.5" style="fill:var(--card);stroke:var(--red)" stroke-width="2.5"/>
+    crossing = `<circle class="pop late" cx="${x}" cy="${limY}" r="4.5" style="fill:var(--card);stroke:var(--red)" stroke-width="2.5"/>
       <text x="${x}" y="${limY + (wide ? 22 : 16)}" font-size="11" text-anchor="middle" style="fill:var(--red)">${MON[cur.month - 1]}</text>`;
   }
 
@@ -71,13 +71,13 @@ export function cumulativeChart(series, limit, wide = false) {
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Cumulative pay by month against the ${fmtLimit(limit)} tax card limit${j >= 0 ? `, crossed in ${MON[series[j].month - 1]}` : ''}">
   ${grid}
   <line x1="${padL}" y1="${base}" x2="${W - padR}" y2="${base}" style="stroke:var(--axis)"/>
-  <line x1="${padL}" y1="${ly}" x2="${W - padR}" y2="${ly}" style="stroke:var(--red)" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <line class="fade" x1="${padL}" y1="${ly}" x2="${W - padR}" y2="${ly}" style="stroke:var(--red)" stroke-width="1.2" stroke-dasharray="5 4"/>
   <text x="${padL + 6}" y="${ly - (wide ? 6 : 6)}" font-size="${wide ? 12 : 11}" font-weight="600" style="fill:var(--red)">Tax card limit ${fmtLimit(limit)}</text>
   ${area}
   ${line('cumGross', 'var(--blue)')}
   ${netKnown ? line('cumNet', 'var(--green)') : ''}
-  <circle cx="${X(last.month)}" cy="${Y(last.cumGross)}" r="${wide ? 6 : 5}" style="fill:var(--blue);stroke:var(--card)" stroke-width="3"/>
-  ${netKnown ? `<circle cx="${X(last.month)}" cy="${Y(last.cumNet)}" r="${wide ? 6 : 5}" style="fill:var(--green);stroke:var(--card)" stroke-width="3"/>` : ''}
+  <circle class="pop" cx="${X(last.month)}" cy="${Y(last.cumGross)}" r="${wide ? 6 : 5}" style="fill:var(--blue);stroke:var(--card)" stroke-width="3"/>
+  ${netKnown ? `<circle class="pop" cx="${X(last.month)}" cy="${Y(last.cumNet)}" r="${wide ? 6 : 5}" style="fill:var(--green);stroke:var(--card)" stroke-width="3"/>` : ''}
   ${crossing}
   ${labels}
 </svg>`;

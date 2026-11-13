@@ -1,5 +1,6 @@
 // Tax card fixer: what happens if nothing changes, and what to ask Vero. An estimate, Vero's own calculation decides.
 import { fmtEur, fmtPct, about, earlierMonths } from './format.js';
+import { openSheet, closeSheet, attachSheetMotion } from './motion.js';
 
 export const VERO_ORDER_URL = 'https://www.vero.fi/henkiloasiakkaat/verokortti-ja-veroilmoitus/verokortti/tilaa-uusi-verokortti/';
 const ICON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg>';
@@ -55,10 +56,11 @@ export function openFixer(a, { year, through, onOpening }) {
     }
   });
   dlg.querySelector('[data-open]')?.addEventListener('click', () => {
-    dlg.close();
+    closeSheet(dlg, 'cancel');
     onOpening();
   });
   dlg.addEventListener('close', () => dlg.remove());
   document.body.append(dlg);
-  dlg.showModal();
+  attachSheetMotion(dlg);
+  openSheet(dlg);
 }

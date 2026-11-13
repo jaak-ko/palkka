@@ -55,7 +55,7 @@ export function renderDashboard(el, model, payslips = [], ui = {}) {
   const pill = latest && advice?.applicable && !dismissed
     ?`<button class="pill-head" type="button" data-action="fixer">${ICON('<path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/>', 14)}Tax card needs updating</button>`
     : '';
-  const segment = `<div class="segment seg-phone" role="group" aria-label="Screen"><button type="button" data-action="view" data-view="dash" aria-pressed="${view === 'dash'}">Dashboard</button><button type="button" data-action="view" data-view="year" aria-pressed="${view === 'year'}">Year</button></div>`;
+  const segment = `<div class="segment seg-phone" role="group" aria-label="Screen"><span class="seg-ind" style="transform:translateX(${view === 'year' ? 100 : 0}%)"></span><button type="button" data-action="view" data-view="dash" aria-pressed="${view === 'dash'}">Dashboard</button><button type="button" data-action="view" data-view="year" aria-pressed="${view === 'year'}">Year</button></div>`;
   const header = `<header class="top"><div>
       <p class="count">${monthsCovered} of ${monthsInYear} payslips${latest ? `<span class="wide-only"> · updated with ${MONTHS[latest.month - 1]}</span>` : ''}</p>
       <h1 class="h1">${view === 'year' ? `Year ${year}` : `Your ${year}`}</h1>
@@ -73,8 +73,8 @@ export function renderDashboard(el, model, payslips = [], ui = {}) {
 
 function ratesHtml(keep, tc) {
   return `<div class="rates">
-    <div class="rate"><p class="k">You keep, below the limit</p><p class="v">${fmtEur2(keep.belowLimit)}</p><p class="rate-sub">of each 100 € · rate ${fmtPct(tc.basePct)}</p></div>
-    <div class="rate"><p class="k">You keep, above the limit</p><p class="v" style="color:var(--red)">${fmtEur2(keep.aboveLimit)}</p><p class="rate-sub">of each 100 € · rate ${fmtPct(tc.extraPct)}</p></div>
+    <div class="rate"><p class="k">You keep, below the limit</p><p class="v" data-count="${keep.belowLimit}" data-fmt="eur2">${fmtEur2(keep.belowLimit)}</p><p class="rate-sub">of each 100 € · rate ${fmtPct(tc.basePct)}</p></div>
+    <div class="rate"><p class="k">You keep, above the limit</p><p class="v" style="color:var(--red)" data-count="${keep.aboveLimit}" data-fmt="eur2">${fmtEur2(keep.aboveLimit)}</p><p class="rate-sub">of each 100 € · rate ${fmtPct(tc.extraPct)}</p></div>
   </div>`;
 }
 
@@ -94,13 +94,13 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
   const gauge = `<div class="gauge">
       <svg width="260" height="260" viewBox="0 0 260 260" role="img" aria-label="${fmtPct(used / tc.limit * 100)} of the tax card limit used">
         <circle cx="130" cy="130" r="110" fill="none" style="stroke:var(--track)" stroke-width="18" stroke-linecap="round" stroke-dasharray="${RING_ARC} ${RING_GAP}" transform="rotate(135 130 130)"/>
-        <circle cx="130" cy="130" r="110" fill="none" style="stroke:${over ? 'var(--red)' : 'var(--amber)'}" stroke-width="18" stroke-linecap="round" stroke-dasharray="${arc.toFixed(2)} ${RING_GAP}" transform="rotate(135 130 130)"/>
+        <circle class="arc" cx="130" cy="130" r="110" fill="none" style="stroke:${over ? 'var(--red)' : 'var(--amber)'}" stroke-width="18" stroke-linecap="round" stroke-dasharray="${arc.toFixed(2)} ${RING_GAP}" transform="rotate(135 130 130)"/>
         <circle cx="130" cy="130" r="88" fill="none" style="stroke:var(--grid)" stroke-width="1" stroke-dasharray="2 6"/>
       </svg>
-      <div class="gauge-c"><p class="lbl">Left on your tax card</p><p class="g-num">${fmtEur(left)}</p><p class="g-sub">${sub}</p></div>
+      <div class="gauge-c"><p class="lbl">Left on your tax card</p><p class="g-num" data-count="${left}" data-fmt="eur">${fmtEur(left)}</p><p class="g-sub">${sub}</p></div>
     </div>`;
 
-  const heroL = `<div class="heroL"><p class="lbl">Left on your tax card</p><p class="big">${fmtEur(left)}</p>
+  const heroL = `<div class="heroL"><p class="lbl">Left on your tax card</p><p class="big" data-count="${left}" data-fmt="eur">${fmtEur(left)}</p>
     <p class="rate-line">Rate <b>${fmtPct(tc.basePct)}</b> now, <span class="r">${fmtPct(tc.extraPct)}</span> above the limit</p>
     ${keep ? ratesHtml(keep, tc) : ''}</div>`;
 
@@ -135,11 +135,11 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
   const hero = `<section class="card hero">${gauge}${heroL}${ratesPhone}<div class="barWrap">${bar}${warn}</div></section>`;
 
   const tiles = `<div class="tiles">
-    <section class="tile"><p class="k"><i class="dot" style="background:var(--blue)"></i>Before tax</p><p class="v">${fmtEur(totals.gross)}</p></section>
+    <section class="tile"><p class="k"><i class="dot" style="background:var(--blue)"></i>Before tax</p><p class="v" data-count="${totals.gross}" data-fmt="eur">${fmtEur(totals.gross)}</p></section>
     ${netKnown
-      ? `<section class="tile"><p class="k"><i class="dot" style="background:var(--green)"></i>After tax</p><p class="v">${fmtEur(totals.net)}</p></section>`
+      ? `<section class="tile"><p class="k"><i class="dot" style="background:var(--green)"></i>After tax</p><p class="v" data-count="${totals.net}" data-fmt="eur">${fmtEur(totals.net)}</p></section>`
       : `<section class="tile tap" role="button" tabindex="0" data-action="opening"><p class="k"><i class="dot" style="background:var(--green)"></i>After tax</p><p class="v">–</p></section>`}
-    <section class="tile"><p class="k">Year-end forecast</p><p class="v">${fmtEur(yearEndForecastGross)}</p></section>
+    <section class="tile"><p class="k">Year-end forecast</p><p class="v" data-count="${yearEndForecastGross}" data-fmt="eur">${fmtEur(yearEndForecastGross)}</p></section>
     <section class="tile"><p class="k">Holiday left</p><p class="v">${holidayDaysLeft == null ? '—' : `${holidayDaysLeft} <small>${holidayDaysLeft === 1 ? 'day' : 'days'}</small>`}</p></section>
   </div>`;
 

@@ -1,6 +1,7 @@
 // Confirm sheet: a modal <dialog> (bottom sheet on phone, centred on Mac). Resolves with the typed strings on Save, null on Cancel.
 import { parseFiNumber } from '../core/parse.js';
 import { esc } from './format.js';
+import { openSheet, attachSheetMotion } from './motion.js';
 
 const isNum = (s) => { try { parseFiNumber(s); return true; } catch { return false; } };
 export const checks = {
@@ -71,7 +72,8 @@ export function askFields({ title, subtitle = '', text = '', fields, save = 'Sav
       resolve(out);
     });
     document.body.append(dlg);
-    dlg.showModal();
+    attachSheetMotion(dlg);
+    openSheet(dlg);
     update();
   });
 }

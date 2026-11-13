@@ -7,19 +7,28 @@ import { addFiles } from './add-payslip.js';
 import { saveOpening } from './opening.js';
 import { openFixer } from './fixer.js';
 import { esc } from './format.js';
+import { enterPass, reducedMotion } from './motion.js';
 import { noticeSignature, dismissNotice, showNoticeAgain } from './notice.js';
 
 const root = document.getElementById('app');
 const picker = document.getElementById('picker');
 const toastEl = document.getElementById('toast');
 const state = { year: null, selected: null, draft: null, view: 'dash', advice: null, through: 0 };
+// Entrance animations play only on the first render, and after a year or view change (see render()).
+let pendingAnimate = true;
+let prevView = null;
 let store;
 
 function notify(msg) {
   toastEl.textContent = msg;
+  toastEl.classList.remove('out');
   toastEl.hidden = false;
   clearTimeout(notify.timer);
-  notify.timer = setTimeout(() => { toastEl.hidden = true; }, 5000);
+  clearTimeout(notify.hide);
+  notify.timer = setTimeout(() => {
+    toastEl.classList.add('out');
+    notify.hide = setTimeout(() => { toastEl.hidden = true; }, 260);
+  }, 4000);
 }
 
 // Months covered per year, for the "n/12" in the Mac sidebar.
@@ -35,6 +44,8 @@ async function yearCounts(years) {
 }
 
 async function render() {
+  const animate = pendingAnimate;
+  pendingAnimate = false;
   try {
     const years = await store.years();
     if (state.year == null || (years.length && !years.includes(state.year))) state.year = years.at(-1) ?? new Date().getFullYear();
@@ -65,6 +76,18 @@ async function render() {
       advice: state.advice,
       summary: state.view === 'year' ? yearSummary(year, payslips, stored) : null,
     });
+    root.classList.toggle('enter', animate);
+    if (animate) enterPass(root);
+    // The Dashboard | Year indicator slides from the previous position.
+    const ind = root.querySelector('.seg-ind');
+    if (ind && prevView && prevView !== state.view) {
+      ind.style.transition = 'none';
+      ind.style.transform = `translateX(${prevView === 'year' ? 100 : 0}%)`;
+      void ind.offsetWidth;
+      ind.style.transition = '';
+      ind.style.transform = `translateX(${state.view === 'year' ? 100 : 0}%)`;
+    }
+    prevView = state.view;
   } catch (e) {
     root.innerHTML = `<div class="shell"><div class="main"><section class="card empty"><p>Could not open local storage: ${esc(e.message)}</p></section></div></div>`;
   }
@@ -90,10 +113,12 @@ root.addEventListener('click', async (e) => {
   if (action === 'add') picker.click();
   else if (action === 'view') {
     state.view = el.dataset.view;
+    pendingAnimate = true;
     render();
   } else if (action === 'year') {
     state.year = Number(el.dataset.year);
     state.selected = null;
+    pendingAnimate = true;
     render();
   } else if (action === 'year-step') {
     const years = await store.years();
@@ -101,6 +126,7 @@ root.addEventListener('click', async (e) => {
     if (i >= 0 && i < years.length) {
       state.year = years[i];
       state.selected = null;
+      pendingAnimate = true;
       render();
     }
   } else if (action === 'pick') {
@@ -113,6 +139,12 @@ root.addEventListener('click', async (e) => {
     if (state.advice) openFixer(state.advice, { year: state.year, through: state.through, onOpening: openOpeningForm });
   } else if (action === 'dismiss-notice') {
     const latestSlip = state.latestSlip;
+    // The card collapses first, then the state changes and the page re-renders without it.
+    const card = root.querySelector('.warn');
+    if (card && !reducedMotion()) {
+      card.classList.add('collapse');
+      await new Promise((r) => setTimeout(r, 250));
+    }
     if (latestSlip) dismissNotice(noticeSignature(latestSlip));
     notify('Notice hidden');
     render();
