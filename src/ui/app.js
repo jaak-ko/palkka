@@ -7,6 +7,7 @@ import { addFiles } from './add-payslip.js';
 import { saveOpening } from './opening.js';
 import { openFixer } from './fixer.js';
 import { esc } from './format.js';
+import { noticeSignature, dismissNotice, showNoticeAgain } from './notice.js';
 
 const root = document.getElementById('app');
 const picker = document.getElementById('picker');
@@ -52,6 +53,7 @@ async function render() {
     }
     const model = buildDashboard(year, payslips, opening);
     state.advice = taxCardAdvice({ year, payslips, opening });
+    state.latestSlip = payslips.at(-1) ?? null; // store order is ascending, so the last one is the latest
     state.through = opening ? opening.throughMonth : (first ? first.month - 1 : 0);
     const list = years.length ? years : [year];
     renderDashboard(root, model, payslips, {
@@ -109,6 +111,14 @@ root.addEventListener('click', async (e) => {
     await openOpeningForm();
   } else if (action === 'fixer') {
     if (state.advice) openFixer(state.advice, { year: state.year, through: state.through, onOpening: openOpeningForm });
+  } else if (action === 'dismiss-notice') {
+    const latestSlip = state.latestSlip;
+    if (latestSlip) dismissNotice(noticeSignature(latestSlip));
+    notify('Notice hidden');
+    render();
+  } else if (action === 'show-notice') {
+    showNoticeAgain();
+    render();
   } else if (action === 'print') {
     window.print();
   } else if (action === 'delete') {
