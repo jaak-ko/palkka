@@ -106,7 +106,7 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
         <circle class="arc" cx="130" cy="130" r="110" fill="none" style="stroke:${over ? 'var(--red)' : 'var(--amber)'}" stroke-width="18" stroke-linecap="round" stroke-dasharray="${arc.toFixed(2)} ${RING_GAP}" transform="rotate(135 130 130)"/>
         <circle cx="130" cy="130" r="88" fill="none" style="stroke:var(--grid)" stroke-width="1" stroke-dasharray="2 6"/>
       </svg>
-      <div class="gauge-c"><p class="lbl">Earned in ${year}</p><p class="g-num" data-count="${totals.gross}" data-fmt="eur">${fmtEur(totals.gross)}</p><p class="g-sub">${fmtEur(used)} of ${fmtEur(tc.limit)} tax card limit</p></div>
+      <div class="gauge-c"><p class="lbl">Earned in ${year}</p><p class="g-num" data-count="${totals.gross}" data-fmt="eur">${fmtEur(totals.gross)}</p><p class="g-sub">Tax card limit ${fmtEur(tc.limit)}</p></div>
     </div>`;
 
   const ringLeft = `<p class="ring-left">${over ? `Over by <b>${fmtEur(tc.overBy)}</b> on your tax card` : `<b>${fmtEur(left)}</b> left on your tax card`}</p>`;
