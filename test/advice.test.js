@@ -73,3 +73,11 @@ test('already over the limit still works', () => {
 test('no slips: null', () => {
   assert.equal(taxCardAdvice({ year: 2026, payslips: [], opening: null, now: NOV_13 }), null);
 });
+
+test('withheldYtd does not add a slip the opening already covers', () => {
+  const aug = slip({ period: '8/2026/1', month: 8, tax: 500, taxableIncome: 4000, net: 3000 });
+  const o = { year: 2026, throughMonth: 8, gross: 30000, tax: 6000, net: 0, grossFrozen: true };
+  const a = taxCardAdvice({ year: 2026, payslips: [aug], opening: o, now: NOV_13 });
+  assert.equal(a.withheldYtd, 6000);
+  assert.equal(a.withheldYtdEstimated, false);
+});

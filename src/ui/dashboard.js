@@ -179,7 +179,7 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
   }
 
   const slips = `<section class="card slips slips-main"><div class="card-h"><h2>Payslips</h2></div>${listHtml(payslips, model.missingMonths, through, ui)}</section>`;
-  return `${hero}${tiles}${yearTotalsHtml(year, ui.summary, through, ui.partialNetTax)}<div class="split">${chart}${where}</div>${slips}`;
+  return `${hero}${tiles}${yearTotalsHtml(year, ui.summary, through, ui.partialNetTax)}<div class="split">${chart}${where}</div>${slips}${slipDetailHtml(payslips, ui)}`;
 }
 
 // The navigation shared by the Mac sidebar and the phone drawer: year, payslips, add.
@@ -191,7 +191,7 @@ export function navHtml({ years, counts, year, payslips, latestPeriod, missingMo
 }
 
 // Payslip rows (newest first), a net-change chip on each row that has an earlier slip, missing months,
-// the opening row, and the detail of the tapped slip (comparison first, then pay lines).
+// the opening row. The detail of the tapped slip is in slipDetailHtml, in the main view.
 function listHtml(payslips, missing, through, ui) {
   const selected = ui.selected ? payslips.find((p) => p.period === ui.selected) : null;
   const rows = [
@@ -213,18 +213,24 @@ function listHtml(payslips, missing, through, ui) {
         : `<button class="row todo" type="button" data-action="opening"><span><span class="n" style="display:block">${label}</span><span class="s">Add opening balance</span></span><span class="pay-amt">›</span></button>`,
     });
   }
-  let detail = '';
-  if (selected) {
-    const cmp = comparePayslips(payslips, selected.period);
-    const compare = cmp
-      ? `<p class="lbl">Compared with ${MONTHS[monthOf(cmp.prevPeriod) - 1]}</p>
-         <div class="line strong"><span>Net pay</span><span class="${cmp.netDelta >= 0 ? 'up' : 'down'}">${fmtSigned(cmp.netDelta)}</span></div>
-         ${cmp.rows.map((r) => `<div class="line"><span>${esc(r.code)} ${esc(r.name)}</span><span class="${r.delta >= 0 ? 'up' : 'down'}">${fmtSigned(r.delta)}</span></div>`).join('')}`
-      : `<p class="lbl">No earlier payslip to compare with</p>`;
-    detail = `<div class="detail">${compare}
-      <p class="lbl detail-h">Pay lines</p>
-      ${selected.lines.map((l) => `<div class="line"><span>${esc(l.code)} ${esc(l.name)}</span><span>${fmtEur2(l.amount)}</span></div>`).join('')}
-      <button class="del" type="button" data-action="delete" data-period="${esc(selected.period)}">Delete this payslip</button></div>`;
-  }
-  return rows.map((r) => r.html).join('') + detail;
+  return rows.map((r) => r.html).join('');
+}
+
+// The tapped payslip's detail, in the main view: the change against the previous month, the pay lines, and Delete.
+export function slipDetailHtml(payslips, ui) {
+  const selected = ui.selected ? payslips.find((p) => p.period === ui.selected) : null;
+  if (!selected) return '';
+  const cmp = comparePayslips(payslips, selected.period);
+  const compare = cmp
+    ? `<p class="lbl">Compared with ${MONTHS[monthOf(cmp.prevPeriod) - 1]}</p>
+       <div class="line strong"><span>Net pay</span><span class="${cmp.netDelta >= 0 ? 'up' : 'down'}">${fmtSigned(cmp.netDelta)}</span></div>
+       ${cmp.rows.map((r) => `<div class="line"><span>${esc(r.code)} ${esc(r.name)}</span><span class="${r.delta >= 0 ? 'up' : 'down'}">${fmtSigned(r.delta)}</span></div>`).join('')}`
+    : `<p class="lbl">No earlier payslip to compare with</p>`;
+  return `<section class="card slip-detail" id="slip-detail">
+    <div class="card-h"><h2>${MONTHS[selected.month - 1]} ${selected.year}</h2><span class="sm">${paidOn(selected.payDate)}</span></div>
+    ${compare}
+    <p class="lbl detail-h">Pay lines</p>
+    ${selected.lines.map((l) => `<div class="line"><span>${esc(l.code)} ${esc(l.name)}</span><span>${fmtEur2(l.amount)}</span></div>`).join('')}
+    <button class="del" type="button" data-action="delete" data-period="${esc(selected.period)}">Delete this payslip</button>
+  </section>`;
 }

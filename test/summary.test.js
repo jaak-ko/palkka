@@ -73,3 +73,15 @@ test('reconcile: a wrong net is flagged with the difference', () => {
   assert.equal(r.ok, false);
   assert.equal(r.diff, -50.99);
 });
+
+test('yearSummary does not add slips the opening already covers', () => {
+  const aug = { ...sep, period: '8/2026/1', month: 8, gross: 4000, taxableIncome: 4000, net: 3000, tax: 500, tyel: 300, unemployment: 40 };
+  const o = { year: 2026, throughMonth: 8, gross: 30000, tax: 0, net: 0, tyel: 0, unemployment: 0, grossFrozen: true };
+  const s = yearSummary(2026, [aug], o);
+  assert.equal(s.taxable, 30000);
+  assert.equal(s.net, 0);
+  assert.equal(s.tax, 0);
+  assert.equal(s.tyel, 0);
+  assert.equal(s.unemployment, 0);
+  assert.equal(s.monthsCovered, 8);
+});

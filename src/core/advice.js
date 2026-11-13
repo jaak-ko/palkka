@@ -1,7 +1,7 @@
 // Tax card advice. An estimate: Vero's 2026 example rates plus a calibration from the user's own card.
 import { buildDashboard } from './calc.js';
+import { round2, uniqueByPeriod } from './util.js';
 
-const round2 = n => Math.round(n * 100) / 100;
 const round1 = n => Math.round(n * 10) / 10;
 // Vero 2026 example points: [annual income, annual tax] (Helsinki, evangelical Lutheran).
 const POINTS = [[0, 0], [10000, 0], [16000, 80], [20000, 300], [30000, 2550], [40000, 5600],
@@ -25,8 +25,6 @@ export function calibrationFromCard({ basePct, limit }) {
   return (basePct / 100 * limit - estimateAnnualTax(limit)) / limit * 100;
 }
 
-const uniqueByPeriod = list => [...new Map(list.map(p => [p.period, p])).values()];
-
 export function taxCardAdvice({ year, payslips, opening, now = new Date() }) {
   const dash = buildDashboard(year, payslips, opening, now);
   if (!dash.latestPeriod) return null;
@@ -39,10 +37,13 @@ export function taxCardAdvice({ year, payslips, opening, now = new Date() }) {
   const calibrationPct = calibrationFromCard({ basePct, limit });
   const expectedAnnualTax = round2(estimateAnnualTax(estimatedAnnualIncome, calibrationPct));
 
-  const slips = uniqueByPeriod(payslips.filter(p => p.year === year));
-  const knownTax = opening && typeof opening.tax === 'number';
+  // Slips inside the opening are already in its tax figure.
+  const op = opening && opening.year === year ? opening : null;
+  const slips = uniqueByPeriod(payslips.filter(p => p.year === year))
+    .filter(p => p.month > (op ? op.throughMonth : 0));
+  const knownTax = op && typeof op.tax === 'number';
   const withheldYtd = round2(knownTax
-    ? opening.tax + slips.reduce((s, p) => s + p.tax, 0)
+    ? op.tax + slips.reduce((s, p) => s + p.tax, 0)
     : basePct / 100 * used);
 
   const below = Math.min(remainingIncome, Math.max(0, limit - used));

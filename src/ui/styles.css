@@ -56,7 +56,10 @@ button { font: inherit; }
 .main-inner { display: flex; flex-direction: column; gap: 12px; }
 
 /* header */
-.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 0 4px 6px; }
+.top { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; padding: 0 0 6px; }
+.top > div:nth-child(2) { text-align: center; min-width: 0; }
+.top-r { grid-column: 1 / -1; justify-self: center; margin-top: 10px; }
+.top-r:empty { display: none; }
 .count { font-size: 13px; color: var(--sub); letter-spacing: .02em; }
 .h1 { margin-top: 2px; font-size: 34px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
 .yarrows { display: flex; gap: 6px; }
@@ -258,7 +261,9 @@ dialog.sheet form {
 
   .main { padding: 36px clamp(20px, 4vw, 56px) 48px; }
   .main-inner { max-width: 1080px; margin: 0 auto; gap: 20px; }
-  .top { align-items: flex-end; padding: 0; }
+  .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 0; }
+  .top > div:nth-child(2) { text-align: left; }
+  .top-r { grid-column: auto; margin-top: 0; }
   .count { font-size: 14px; color: var(--muted); }
   .h1 { font-size: 40px; }
   .yarrows { display: none; }
@@ -514,3 +519,10 @@ dialog.drawer.closing .drawer-panel { animation: drawer-out 260ms cubic-bezier(.
 
 /* Muted one-line tip under the add button */
 .tip { margin: 8px 4px 0; font-size: 12px; line-height: 1.4; color: var(--muted); text-align: center; }
+
+/* The payslip detail, in the main view */
+.slip-detail .card-h { margin-bottom: 4px; }
+.slip-detail .line { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 4px 0; font-variant-numeric: tabular-nums; }
+.slip-detail .line.strong { font-weight: 600; border-bottom: 1px solid var(--row); padding-bottom: 8px; margin-bottom: 4px; }
+.slip-detail .detail-h { margin: 12px 0 4px; }
+.slip-detail .del { margin-top: 14px; }

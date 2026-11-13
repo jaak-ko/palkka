@@ -176,7 +176,7 @@ export function attachSwipe(dlg, panel, { axis = 'y' } = {}) {
   const begin = (c, t, src) => { if (!phone() || dlg.dataset.closing) return; source = src; drag.begin(c.x, c.y, t); };
   handles.forEach((handle) => {
     handle.style.touchAction = 'none';
-    handle.addEventListener('pointerdown', (e) => { begin({ x: e.clientX, y: e.clientY }, e.timeStamp, 'handle'); handle.setPointerCapture?.(e.pointerId); });
+    handle.addEventListener('pointerdown', (e) => { begin({ x: e.clientX, y: e.clientY }, e.timeStamp, 'handle'); try { handle.setPointerCapture(e.pointerId); } catch { /* no active pointer (synthetic events): the drag still works */ } });
     handle.addEventListener('pointermove', (e) => drag.move(e.clientX, e.clientY, e.timeStamp, e));
     handle.addEventListener('pointerup', () => drag.end());
     handle.addEventListener('pointercancel', () => drag.end());

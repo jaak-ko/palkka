@@ -1,6 +1,5 @@
 // Keep-of-100, year totals and the pay-line reconciliation.
-const round2 = n => Math.round(n * 100) / 100;
-const uniqueByPeriod = list => [...new Map(list.map(p => [p.period, p])).values()];
+import { round2, uniqueByPeriod, coveredMonths } from './util.js';
 
 // Of each 100 € of gross-up income, what is kept below and above the tax card limit.
 export function keepOfHundred(p) {
@@ -17,25 +16,24 @@ export function yearSummary(year, payslips, opening) {
   const num = v => (typeof v === 'number' ? v : 0);
   const sum = (list, k) => list.reduce((s, p) => s + p[k], 0);
   const lineSum = code => slips.reduce((s, p) => s + p.lines.filter(l => l.code === code).reduce((t, l) => t + l.amount, 0), 0);
-
-  const months = new Set(slips.map(p => p.month));
-  for (let m = 1; op && m <= op.throughMonth; m++) months.add(m);
+  // Slips inside the opening are already in its gross/tax/pension figures.
+  const after = slips.filter(p => p.month > (op ? op.throughMonth : 0));
 
   const tyelComplete = op
     ? typeof op.tyel === 'number' && typeof op.unemployment === 'number'
     : slips.length > 0 && slips[0].month === 1;
 
   return {
-    taxable: round2((op ? op.gross : 0) + sum(slips, 'taxableIncome')),
-    net: round2(num(op?.net) + sum(slips, 'net')),
-    tax: round2(num(op?.tax) + sum(slips, 'tax')),
-    tyel: round2(num(op?.tyel) + sum(slips, 'tyel')),
-    unemployment: round2(num(op?.unemployment) + sum(slips, 'unemployment')),
+    taxable: round2((op ? op.gross : 0) + sum(after, 'taxableIncome')),
+    net: round2(num(op?.net) + sum(after, 'net')),
+    tax: round2(num(op?.tax) + sum(after, 'tax')),
+    tyel: round2(num(op?.tyel) + sum(after, 'tyel')),
+    unemployment: round2(num(op?.unemployment) + sum(after, 'unemployment')),
     tyelComplete,
     phoneBenefit: round2(lineSum('304')),
     lunchDeduction: round2(Math.abs(lineSum('920'))),
     holidayDaysLeft: slips.at(-1)?.holidayDaysLeft ?? null,
-    monthsCovered: months.size,
+    monthsCovered: coveredMonths(slips, op ? op.throughMonth : 0),
   };
 }
 

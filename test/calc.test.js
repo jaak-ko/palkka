@@ -133,3 +133,18 @@ test('breakdown: a negative remainder moves into net, other never goes negative'
   const p = { gross: 100, net: 90, tax: 10, tyel: 5, unemployment: 0 };
   assert.deepEqual(breakdown(p), { net: 85, tax: 10, pension: 5, other: 0 });
 });
+
+test('months covered by the opening are not counted again in totals', () => {
+  // Opening covers months 1..8; the August slip is already inside its gross/tax/net.
+  const aug = slip({ period: '8/2026/1', month: 8, gross: 4000, taxableIncome: 4000, net: 3000, tax: 500 });
+  const o = { year: 2026, throughMonth: 8, gross: 30000, tax: 0, net: 0, grossFrozen: true };
+  const d = buildDashboard(2026, [aug], o, NOV_13);
+  assert.equal(d.totals.gross, 30000);
+  assert.equal(d.totals.net, 0);
+  assert.equal(d.totals.tax, 0);
+});
+
+test('monthsCovered counts opening months once, with no slips it is the opening alone', () => {
+  const d = buildDashboard(2026, [], { year: 2026, throughMonth: 8, gross: 30000, tax: 0, net: 0, grossFrozen: true }, NOV_13);
+  assert.equal(d.monthsCovered, 8);
+});

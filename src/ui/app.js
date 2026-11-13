@@ -2,6 +2,7 @@ import { openStore } from '../core/store.js';
 import { buildDashboard, computeOpeningGross } from '../core/calc.js';
 import { taxCardAdvice } from '../core/advice.js';
 import { yearSummary } from '../core/summary.js';
+import { coveredMonths } from '../core/util.js';
 import { renderDashboard } from './dashboard.js';
 import { addFiles } from './add-payslip.js';
 import { saveOpening } from './opening.js';
@@ -13,9 +14,13 @@ import { noticeSignature, dismissNotice, showNoticeAgain } from './notice.js';
 const root = document.getElementById('app');
 const picker = document.getElementById('picker');
 const toastEl = document.getElementById('toast');
-const state = { year: null, selected: null, draft: null, advice: null, through: 0 };
+const state = { year: null, years: [], selected: null, draft: null, advice: null, through: 0 };
 // Entrance animations play only on the first render and after a year change (see render()).
 let pendingAnimate = true;
+// Renders may overlap (every action re-renders). Each render takes a sequence number; one that finishes after a newer
+// render has started is dropped, so the screen always shows the newest state.
+let renderSeq = 0;
+let carryAnimate = false; // an entrance pass owed by a dropped render
 let store;
 
 // The phone drawer: the same navigation as the Mac sidebar, in a modal dialog (focus stays inside, page locked).
@@ -67,22 +72,25 @@ async function yearCounts(years) {
   for (const y of years) {
     const [slips, stored] = await Promise.all([store.listPayslips(y), store.getOpening(y)]);
     const { opening } = effectiveOpening(y, slips, stored);
-    const months = new Set(slips.map((p) => p.month));
-    for (let m = 1; opening && m <= opening.throughMonth; m++) months.add(m);
-    counts[y] = months.size;
+    counts[y] = coveredMonths(slips, opening ? opening.throughMonth : 0);
   }
   return counts;
 }
 
 async function render() {
-  const animate = pendingAnimate;
+  const seq = ++renderSeq;
+  const animate = pendingAnimate || carryAnimate;
   pendingAnimate = false;
+  carryAnimate = false;
+  const stale = () => seq !== renderSeq;
   try {
     const years = await store.years();
+    if (stale()) { carryAnimate = animate; return; }
     if (state.year == null || (years.length && !years.includes(state.year))) state.year = years.at(-1) ?? new Date().getFullYear();
     const year = state.year;
     const payslips = await store.listPayslips(year);
     const stored = await store.getOpening(year);
+    if (stale()) { carryAnimate = animate; return; }
     const first = payslips[0];
     const { opening, draft } = effectiveOpening(year, payslips, stored);
     state.draft = draft;
@@ -91,9 +99,12 @@ async function render() {
     state.latestSlip = payslips.at(-1) ?? null; // store order is ascending, so the last one is the latest
     state.through = opening ? opening.throughMonth : (first ? first.month - 1 : 0);
     const list = years.length ? years : [year];
+    state.years = list;
+    const counts = await yearCounts(list);
+    if (stale()) { carryAnimate = animate; return; } // a newer render has started: drop this one
     const navHtml = renderDashboard(root, model, payslips, {
       years: list,
-      yearCounts: await yearCounts(list),
+      yearCounts: counts,
       selected: state.selected,
       hasOpening: !!stored,
       advice: state.advice,
@@ -105,7 +116,7 @@ async function render() {
     root.classList.toggle('enter', animate);
     if (animate) enterPass(root);
   } catch (e) {
-    root.innerHTML = `<div class="shell"><div class="main"><section class="card empty"><p>Could not open local storage: ${esc(e.message)}</p></section></div></div>`;
+    if (!stale()) root.innerHTML = `<div class="shell"><div class="main"><section class="card empty"><p>Could not open local storage: ${esc(e.message)}</p></section></div></div>`;
   }
 }
 
@@ -148,10 +159,9 @@ async function handleAction(el) {
     pendingAnimate = true;
     render();
   } else if (action === 'year-step') {
-    const years = await store.years();
-    const i = years.indexOf(state.year) + Number(el.dataset.step);
-    if (i >= 0 && i < years.length) {
-      state.year = years[i];
+    const i = state.years.indexOf(state.year) + Number(el.dataset.step);
+    if (i >= 0 && i < state.years.length) {
+      state.year = state.years[i];
       state.selected = null;
       pendingAnimate = true;
       render();
@@ -159,7 +169,11 @@ async function handleAction(el) {
   } else if (action === 'pick') {
     const period = el.dataset.period;
     state.selected = state.selected === period ? null : period;
-    render();
+    await render();
+    // The detail lives in the main view: bring it into view (after a drawer has closed and unlocked the page).
+    if (state.selected) {
+      setTimeout(() => document.getElementById('slip-detail')?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }), inDrawer ? 320 : 0);
+    }
   } else if (action === 'opening') {
     await openOpeningForm();
   } else if (action === 'fixer') {

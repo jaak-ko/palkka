@@ -1,5 +1,5 @@
 // Pay lines of one slip against the previous month's slip in the same year.
-const round2 = n => Math.round(n * 100) / 100;
+import { round2 } from './util.js';
 
 // Lines with the same code and name are matched by occurrence (order within the slip).
 function byKey(lines) {

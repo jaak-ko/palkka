@@ -1,5 +1,5 @@
-// Dashboard maths. Euro amounts are plain numbers, rounded to cents.
-const round2 = n => Math.round(n * 100) / 100;
+// Dashboard maths.
+import { round2, uniqueByPeriod, coveredMonths } from './util.js';
 
 // Opening gross = cumulative tax-card income minus taxable income of the earliest slip of the year.
 export function computeOpeningGross(payslips, year) {
@@ -7,9 +7,6 @@ export function computeOpeningGross(payslips, year) {
   if (!first || first.taxCard?.cumulativeIncome == null || first.taxableIncome == null) return null;
   return round2(first.taxCard.cumulativeIncome - first.taxableIncome);
 }
-
-// Same period replaces: the last one given wins.
-const uniqueByPeriod = list => [...new Map(list.map(p => [p.period, p])).values()];
 
 export function buildDashboard(year, payslips, opening, now = new Date()) {
   const slips = uniqueByPeriod(payslips.filter(p => p.year === year)).sort((a, b) => a.month - b.month);
@@ -35,9 +32,11 @@ export function buildDashboard(year, payslips, opening, now = new Date()) {
     if (latest && m > latest.month) (isPast(m) ? missingMonths : forecastMonths).push(m);
     else if (latest || isPast(m)) missingMonths.push(m);
   }
-  const monthsCovered = 12 - missingMonths.length - forecastMonths.length;
+  const monthsCovered = coveredMonths(slips, throughMonth);
 
-  const sum = k => slips.reduce((s, p) => s + p[k], 0);
+  // Slips inside the opening (month <= throughMonth) are already in its figures.
+  const after = slips.filter(p => p.month > throughMonth);
+  const sum = k => after.reduce((s, p) => s + p[k], 0);
   const totals = {
     gross: round2(openGross + sum('taxableIncome')),
     net: netKnown ? round2(openNet + sum('net')) : null,
