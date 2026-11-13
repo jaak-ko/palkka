@@ -42,7 +42,7 @@ export function openFixer(a, { year, through, onOpening }) {
 
     ${a.withheldYtdEstimated ? `<button class="fx-note" type="button" data-open>Tax for ${earlierMonths(through)} is not entered yet, so this uses your tax card rate. Add it in the opening balance ›</button>` : ''}
     <p class="fx-est">Estimate calibrated on your tax card and Vero's published example rates. Vero's own calculation decides.</p>
-    <a class="fx-link" href="${VERO_ORDER_URL}" target="_blank" rel="noopener noreferrer">Order a new tax card at vero.fi</a>
+    <a class="add fx-link" href="${VERO_ORDER_URL}" target="_blank" rel="noopener noreferrer">Order a new tax card at vero.fi</a>
     <button class="ghost" type="submit" value="close">Close</button>
   </form>`;
 

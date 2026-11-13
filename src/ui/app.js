@@ -3,7 +3,7 @@ import { buildDashboard, computeOpeningGross } from '../core/calc.js';
 import { taxCardAdvice } from '../core/advice.js';
 import { yearSummary } from '../core/summary.js';
 import { coveredMonths } from '../core/util.js';
-import { renderDashboard } from './dashboard.js';
+import { renderDashboard, slipDetailHtml } from './dashboard.js';
 import { addFiles } from './add-payslip.js';
 import { saveOpening } from './opening.js';
 import { openFixer } from './fixer.js';
@@ -14,7 +14,7 @@ import { noticeSignature, dismissNotice, showNoticeAgain } from './notice.js';
 const root = document.getElementById('app');
 const picker = document.getElementById('picker');
 const toastEl = document.getElementById('toast');
-const state = { year: null, years: [], selected: null, draft: null, advice: null, through: 0 };
+const state = { year: null, years: [], payslips: [], selected: null, draft: null, advice: null, through: 0 };
 // Entrance animations play only on the first render and after a year change (see render()).
 let pendingAnimate = true;
 // Renders may overlap (every action re-renders). Each render takes a sequence number; one that finishes after a newer
@@ -100,6 +100,7 @@ async function render() {
     state.through = opening ? opening.throughMonth : (first ? first.month - 1 : 0);
     const list = years.length ? years : [year];
     state.years = list;
+    state.payslips = payslips;
     const counts = await yearCounts(list);
     if (stale()) { carryAnimate = animate; return; } // a newer render has started: drop this one
     const navHtml = renderDashboard(root, model, payslips, {
@@ -141,6 +142,34 @@ async function handlePicked(input) {
   render();
 }
 
+// Shows, swaps or hides the payslip detail in place. Returns false when there is no detail container to animate.
+// Open: content in, then the wrapper grows (grid rows 0fr to 1fr). Swap: fade out, replace, fade in. Close: shrink.
+let detailTimer = null;
+function showDetail(next) {
+  const wrap = document.getElementById('detail-wrap');
+  if (!wrap) return false;
+  const inner = wrap.querySelector('.detail-inner');
+  const instant = reducedMotion();
+  clearTimeout(detailTimer);
+  if (!next) {
+    wrap.classList.remove('open');
+    detailTimer = setTimeout(() => { if (!wrap.classList.contains('open')) inner.innerHTML = ''; }, instant ? 0 : 280);
+    return true;
+  }
+  const html = slipDetailHtml(state.payslips, { selected: next });
+  if (wrap.classList.contains('open') && !instant) {
+    inner.style.opacity = '0';
+    detailTimer = setTimeout(() => { inner.innerHTML = html; inner.style.opacity = ''; }, 200);
+  } else if (wrap.classList.contains('open')) {
+    inner.innerHTML = html;
+  } else {
+    inner.innerHTML = html;
+    if (instant) wrap.classList.add('open');
+    else { void wrap.offsetHeight; wrap.classList.add('open'); } // reading the layout first makes the closed state the start of the transition
+  }
+  return true;
+}
+
 // One action handler for the page and the drawer.
 async function handleAction(el) {
   const action = el.dataset.action;
@@ -169,10 +198,12 @@ async function handleAction(el) {
   } else if (action === 'pick') {
     const period = el.dataset.period;
     state.selected = state.selected === period ? null : period;
-    await render();
-    // The detail lives in the main view: bring it into view (after a drawer has closed and unlocked the page).
+    // No page rebuild: flip the rows' highlight and animate the detail card in place.
+    document.querySelectorAll('[data-action="pick"]').forEach((b) => b.classList.toggle('on', b.dataset.period === state.selected));
+    if (!showDetail(state.selected)) await render();
     if (state.selected) {
-      setTimeout(() => document.getElementById('slip-detail')?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }), inDrawer ? 320 : 0);
+      // The detail lives in the main view: bring it into view (after a drawer has closed and unlocked the page).
+      setTimeout(() => document.getElementById('detail-wrap')?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }), inDrawer ? 320 : 60);
     }
   } else if (action === 'opening') {
     await openOpeningForm();

@@ -349,10 +349,6 @@ dialog.sheet form {
   background: var(--warn-bg); color: var(--ink); font-size: 13px;
 }
 .fx-est { font-size: 12px; color: var(--muted); }
-.fx-link {
-  display: flex; align-items: center; justify-content: center; height: 48px; border-radius: 24px;
-  background: var(--pill-bg); color: var(--pill-ink); text-decoration: none; font-weight: 600; font-size: 15px;
-}
 
 /* ---------- year totals card (on the dashboard) ---------- */
 .linkish { background: none; border: 0; padding: 0; color: var(--blue); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
@@ -526,3 +522,36 @@ dialog.drawer.closing .drawer-panel { animation: drawer-out 260ms cubic-bezier(.
 .slip-detail .line.strong { font-weight: 600; border-bottom: 1px solid var(--row); padding-bottom: 8px; margin-bottom: 4px; }
 .slip-detail .detail-h { margin: 12px 0 4px; }
 .slip-detail .del { margin-top: 14px; }
+
+/* Payslip detail: the wrapper animates its height (grid rows 0fr to 1fr), the content fades with it */
+.detail-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 260ms ease-in; }
+.detail-wrap.open { grid-template-rows: 1fr; transition-timing-function: ease-out; }
+.detail-inner { min-height: 0; overflow: hidden; opacity: 0; transition: opacity 200ms ease-in; }
+.detail-wrap.open .detail-inner { opacity: 1; transition-timing-function: ease-out; }
+.detail-inner .slip-detail { margin-top: 10px; }
+
+/* Ring: earned this year in the centre; the tax card left sits under the ring */
+.gauge-c .g-num { font-size: 38px; white-space: nowrap; }
+.gauge-c .g-sub { max-width: 170px; text-align: center; line-height: 1.35; }
+.ring-left { margin-top: 2px; font-size: 15px; color: var(--ink); text-align: center; }
+.ring-left b { font-family: var(--serif); font-weight: 500; font-size: 17px; }
+@media (min-width: 900px) { .ring-left { display: none; } }
+
+/* Year totals: "partial" is a tag next to the label */
+.partial-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; vertical-align: 1px;
+  font-size: 11px; font-weight: 600; color: var(--red-ink); background: var(--red-bg);
+}
+.ytotals .partial-tag { font-size: 11px; }
+
+/* Fixer: the Vero link is a full-width primary button */
+.fx-link { flex: none; height: 52px; text-decoration: none; font-size: 16px; }
+/* the sheet form scrolls when tall: its children keep their natural height (buttons must not squash) */
+dialog.sheet form > * { flex-shrink: 0; }
+
+/* The status bar area: a solid strip, so scrolled content never shows through it */
+body::before {
+  content: ""; position: fixed; top: 0; left: 0; right: 0; z-index: 20; pointer-events: none;
+  height: env(safe-area-inset-top, 0px); background: var(--bg);
+}
+@media print { body::before { display: none; } }

@@ -37,7 +37,7 @@ export function renderDashboard(el, model, payslips = [], ui = {}) {
   const through = opening?.month ?? (first ? first.month - 1 : 0);
   const idx = years.indexOf(year);
 
-  const navCtx = { years, counts, year, payslips, latestPeriod, missingMonths, through, ui };
+  const navCtx = { years, counts, year, payslips, latestPeriod, missingMonths, through, ui, covered: monthsCovered, total: monthsInYear };
   const side = `<aside class="side nav" aria-label="Years and payslips">${navHtml({ ...navCtx, brand: true, addClass: 'add-side' })}</aside>`;
 
   const yearArrows = years.length > 1
@@ -49,7 +49,6 @@ export function renderDashboard(el, model, payslips = [], ui = {}) {
     ?`<button class="pill-head" type="button" data-action="fixer">${ICON('<path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/>', 14)}Tax card needs updating</button>`
     : '';
   const header = `<header class="top"><button class="menu-btn" type="button" data-action="menu" aria-label="Open menu">${MENU}</button><div>
-      <p class="count">${monthsCovered} of ${monthsInYear} payslips${latest ? `<span class="wide-only"> · updated with ${MONTHS[latest.month - 1]}</span>` : ''}</p>
       <h1 class="h1">Your ${year}</h1>
     </div>
     <div class="top-r">${yearArrows}${pill}</div></header>`;
@@ -66,7 +65,7 @@ export function renderDashboard(el, model, payslips = [], ui = {}) {
 // Year totals, after the stat tiles. The print button prints only this card (see the print rules in styles.css).
 function yearTotalsHtml(year, s, through, partialNetTax) {
   if (!s) return '';
-  const row = (label, value, partial = false) => `<div class="yt-row"><span>${label}</span><span>${value}${partial ? ' <small>partial</small>' : ''}</span></div>`;
+  const row = (label, value, partial = false) => `<div class="yt-row"><span>${label}${partial ? ' <span class="partial-tag">partial</span>' : ''}</span><span>${value}</span></div>`;
   return `<section class="card ytotals">
     <div class="card-h"><h2>Year totals</h2><span class="sm">${year}</span></div>
     <p class="yt-print-head">Palkka · Year ${year}</p>
@@ -89,7 +88,7 @@ function ratesHtml(keep, tc) {
 }
 
 function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) {
-  const { year, taxCard: tc, totals, series, holidayDaysLeft, yearEndForecastGross } = model;
+  const { year, taxCard: tc, totals, series, holidayDaysLeft, yearEndForecastGross, monthsCovered, monthsInYear } = model;
   const wide = matchMedia('(min-width: 900px)').matches; // chart geometry follows the layout; app.js redraws on change
   const over = tc.overBy > 0;
   const netKnown = series.every((s) => s.cumNet != null) && totals.net != null;
@@ -107,9 +106,10 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
         <circle class="arc" cx="130" cy="130" r="110" fill="none" style="stroke:${over ? 'var(--red)' : 'var(--amber)'}" stroke-width="18" stroke-linecap="round" stroke-dasharray="${arc.toFixed(2)} ${RING_GAP}" transform="rotate(135 130 130)"/>
         <circle cx="130" cy="130" r="88" fill="none" style="stroke:var(--grid)" stroke-width="1" stroke-dasharray="2 6"/>
       </svg>
-      <div class="gauge-c"><p class="lbl">Left on your tax card</p><p class="g-num" data-count="${left}" data-fmt="eur">${fmtEur(left)}</p><p class="g-sub">${sub}</p></div>
+      <div class="gauge-c"><p class="lbl">Earned in ${year}</p><p class="g-num" data-count="${totals.gross}" data-fmt="eur">${fmtEur(totals.gross)}</p><p class="g-sub">${fmtEur(used)} of ${fmtEur(tc.limit)} tax card limit</p></div>
     </div>`;
 
+  const ringLeft = `<p class="ring-left">${over ? `Over by <b>${fmtEur(tc.overBy)}</b> on your tax card` : `<b>${fmtEur(left)}</b> left on your tax card`}</p>`;
   const heroL = `<div class="heroL"><p class="lbl">Left on your tax card</p><p class="big" data-count="${left}" data-fmt="eur">${fmtEur(left)}</p>
     <p class="rate-line">Rate <b>${fmtPct(tc.basePct)}</b> now, <span class="r">${fmtPct(tc.extraPct)}</span> above the limit</p>
     ${keep ? ratesHtml(keep, tc) : ''}</div>`;
@@ -142,7 +142,7 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
     warn = `<button class="notice-restore" type="button" data-action="show-notice">Show tax card notice</button>`;
   }
 
-  const hero = `<section class="card hero">${gauge}${heroL}${ratesPhone}<div class="barWrap">${bar}${warn}</div></section>`;
+  const hero = `<section class="card hero">${gauge}${ringLeft}${heroL}${ratesPhone}<div class="barWrap">${bar}${warn}</div></section>`;
 
   const tiles = `<div class="tiles">
     <section class="tile"><p class="k"><i class="dot" style="background:var(--blue)"></i>Before tax</p><p class="v" data-count="${totals.gross}" data-fmt="eur">${fmtEur(totals.gross)}</p></section>
@@ -178,15 +178,17 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
     </section>`;
   }
 
-  const slips = `<section class="card slips slips-main"><div class="card-h"><h2>Payslips</h2></div>${listHtml(payslips, model.missingMonths, through, ui)}</section>`;
-  return `${hero}${tiles}${yearTotalsHtml(year, ui.summary, through, ui.partialNetTax)}<div class="split">${chart}${where}</div>${slips}${slipDetailHtml(payslips, ui)}`;
+  const slips = `<section class="card slips slips-main"><div class="card-h"><h2>Payslips <span class="sm">· ${monthsCovered} of ${monthsInYear}</span></h2></div>${listHtml(payslips, model.missingMonths, through, ui)}</section>`;
+  const detailOpen = !!ui.selected && payslips.some((p) => p.period === ui.selected);
+  const detail = `<div class="detail-wrap${detailOpen ? ' open' : ''}" id="detail-wrap"><div class="detail-inner">${slipDetailHtml(payslips, ui)}</div></div>`;
+  return `${hero}${tiles}${yearTotalsHtml(year, ui.summary, through, ui.partialNetTax)}<div class="split">${chart}${where}</div>${slips}${detail}`;
 }
 
 // The navigation shared by the Mac sidebar and the phone drawer: year, payslips, add.
-export function navHtml({ years, counts, year, payslips, latestPeriod, missingMonths, through, ui, brand, addClass, tip = false }) {
+export function navHtml({ years, counts, year, payslips, latestPeriod, missingMonths, through, ui, brand, addClass, tip = false, covered, total }) {
   return `${brand ? '<div class="brand"><div class="mark">p</div><span>palkka</span></div>' : ''}
     <div class="side-sec"><p>Year</p>${years.map((y) => `<button class="yr${y === year ? ' on' : ''}" type="button" data-action="year" data-year="${y}"${y === year ? ' aria-current="true"' : ''}><span>${y}</span>${counts[y] != null ? `<span class="c">${counts[y]}/12</span>` : ''}</button>`).join('')}</div>
-    <div class="side-sec"><p>Payslips</p><div class="slips-side">${latestPeriod ? listHtml(payslips, missingMonths, through, ui) : ''}</div></div>
+    <div class="side-sec"><p>Payslips · ${covered} of ${total}</p><div class="slips-side">${latestPeriod ? listHtml(payslips, missingMonths, through, ui) : ''}</div></div>
     <div class="side-foot"><button class="add ${addClass}" type="button" data-action="add">${PLUS}Add payslips</button>${tip ? TIP : ''}</div>`;
 }
 
