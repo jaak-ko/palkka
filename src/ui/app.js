@@ -41,16 +41,33 @@ const drawerPicker = drawer.querySelector('.picker-drawer');
 function openDrawer() { if (!drawer.open) openSheet(drawer); }
 function closeDrawer() { closeSheet(drawer, 'cancel'); }
 
+// The toast: transform and opacity only, driven by classes (show, leave). A new message while it is leaving turns it
+// back into a shown toast from where it is, and the pending hide is cancelled, so an exit never runs over an entrance.
 function notify(msg) {
-  toastEl.textContent = msg;
-  toastEl.classList.remove('out');
-  toastEl.hidden = false;
   clearTimeout(notify.timer);
   clearTimeout(notify.hide);
+  toastEl.textContent = msg;
+  toastEl.classList.add('anim');
+  toastEl.classList.remove('leave');
+  if (toastEl.hidden) { toastEl.hidden = false; void toastEl.offsetWidth; } // paint the hidden start state first
+  if (!toastEl.classList.contains('show')) { void toastEl.offsetWidth; toastEl.classList.add('show'); }
   notify.timer = setTimeout(() => {
-    toastEl.classList.add('out');
-    notify.hide = setTimeout(() => { toastEl.hidden = true; }, 260);
-  }, 4000);
+    toastEl.classList.remove('show');
+    toastEl.classList.add('leave');
+    notify.hide = setTimeout(() => {
+      toastEl.hidden = true;
+      toastEl.classList.remove('leave', 'anim');
+    }, 200);
+  }, 3600);
+}
+
+// The tax card notice: collapsed in place (its slot) or shown. Only classes change, so the page does not move
+// apart from the collapse itself. The restore link fades in once the card has closed.
+function setNoticeHidden(hidden) {
+  root.querySelector('#notice-slot')?.classList.toggle('collapsed', hidden);
+  root.querySelector('#restore-slot')?.classList.toggle('open', hidden);
+  root.querySelector('.pill-head')?.classList.toggle('is-off', hidden);
+  state.noticeHidden = hidden;
 }
 
 // The opening balance in effect for a year: the stored one (its gross follows the slips unless frozen), else an
@@ -83,6 +100,7 @@ async function render() {
   pendingAnimate = false;
   carryAnimate = false;
   const stale = () => seq !== renderSeq;
+  const prevNoticeHidden = !!state.noticeHidden;
   try {
     const years = await store.years();
     if (stale()) { carryAnimate = animate; return; }
@@ -114,6 +132,15 @@ async function render() {
       partialNetTax: !!opening && (opening.net == null || opening.tax == null),
     });
     drawer.querySelector('.drawer-body').innerHTML = navHtml;
+    const slot = root.querySelector('#notice-slot');
+    const nowHidden = !slot || slot.classList.contains('collapsed');
+    state.noticeHidden = nowHidden;
+    // The notice applies again (a new tax card): open it from closed rather than popping in.
+    if (slot && prevNoticeHidden && !nowHidden && !reducedMotion()) {
+      slot.classList.add('collapsed');
+      void slot.offsetWidth;
+      slot.classList.remove('collapsed');
+    }
     root.classList.toggle('enter', animate);
     if (animate) enterPass(root);
   } catch (e) {
@@ -210,19 +237,12 @@ async function handleAction(el) {
   } else if (action === 'fixer') {
     if (state.advice) openFixer(state.advice, { year: state.year, through: state.through, onOpening: openOpeningForm });
   } else if (action === 'dismiss-notice') {
-    const latestSlip = state.latestSlip;
-    // The card collapses first, then the state changes and the page re-renders without it.
-    const card = root.querySelector('.warn');
-    if (card && !reducedMotion()) {
-      card.classList.add('collapse');
-      await new Promise((r) => setTimeout(r, 250));
-    }
-    if (latestSlip) dismissNotice(noticeSignature(latestSlip));
+    if (state.latestSlip) dismissNotice(noticeSignature(state.latestSlip));
+    setNoticeHidden(true); // no re-render: the page stays put
     notify('Notice hidden');
-    render();
   } else if (action === 'show-notice') {
     showNoticeAgain();
-    render();
+    setNoticeHidden(false);
   } else if (action === 'print') {
     window.print();
   } else if (action === 'delete') {

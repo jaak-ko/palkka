@@ -197,8 +197,9 @@ button.row { cursor: pointer; }
 
 /* toast */
 .toast {
-  position: fixed; left: 16px; right: 16px; top: calc(12px + env(safe-area-inset-top)); max-width: 480px; margin: 0 auto; z-index: 10;
+  position: fixed; left: 16px; right: 16px; top: calc(12px + env(safe-area-inset-top, 0px)); max-width: 480px; margin: 0 auto; z-index: 10;
   background: var(--pill-bg); color: var(--pill-ink); border-radius: 12px; padding: 10px 14px; font-size: 14px;
+  opacity: 0; transform: translateY(-12px);
 }
 
 /* confirm / prompt sheet */
@@ -332,7 +333,8 @@ dialog.sheet form {
 .detail-h { margin-top: 12px !important; }
 
 /* ---------- header pill ---------- */
-.pill-head { border: 0; cursor: pointer; font: inherit; }
+.pill-head { border: 0; cursor: pointer; font: inherit; transition: opacity 240ms ease-out, visibility 0s; }
+.pill-head.is-off { opacity: 0; visibility: hidden; transition: opacity 240ms ease-in, visibility 0s linear 240ms; pointer-events: none; }
 
 /* ---------- tax card fixer ---------- */
 .fixer { gap: 14px !important; }
@@ -397,12 +399,6 @@ dialog.sheet form {
 @keyframes grow-x { from { transform: scaleX(0); } }
 @keyframes draw { from { stroke-dashoffset: 1; } }
 @keyframes pop { 0% { transform: scale(0); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
-@keyframes toast-in { from { opacity: 0; transform: translateY(-16px); } }
-@keyframes toast-out { to { opacity: 0; transform: translateY(-16px); } }
-@keyframes collapse {
-  from { max-height: 520px; opacity: 1; }
-  to { max-height: 0; opacity: 0; margin-top: 0; padding-top: 0; padding-bottom: 0; border-width: 0; }
-}
 @keyframes sheet-in { from { transform: translateY(100%); } }
 @keyframes sheet-out { to { transform: translateY(100%); } }
 @keyframes bd-in { from { opacity: 0; } }
@@ -434,11 +430,23 @@ button, .row, .tile.tap { transition: transform 120ms ease-out; }
 button:not(.warn-x):active, .row:active, .tile.tap:active { transform: scale(.97); }
 
 /* Toast: slides in from the top, out again */
-.toast { animation: toast-in 280ms cubic-bezier(.2, .8, .2, 1) backwards; }
-.toast.out { animation: toast-out 240ms ease-in forwards; }
+/* Toast: transform and opacity only. Enter 260 ms ease-out, leave 200 ms ease-in (see notify in app.js). */
+.toast.show { opacity: 1; transform: none; transition: transform 260ms cubic-bezier(.2, .8, .2, 1), opacity 260ms ease-out; }
+.toast.leave { opacity: 0; transform: translateY(-12px); transition: transform 200ms ease-in, opacity 200ms ease-in; }
+.toast.anim { will-change: transform, opacity; }
 
-/* Tax card notice: collapses when dismissed */
-.warn.collapse { overflow: hidden; animation: collapse 250ms ease-in forwards; }
+/* Tax card notice: the card collapses in place (grid rows 1fr to 0fr), fading and sliding up. Restore reverses it. */
+.notice-slot { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 320ms ease-in-out; }
+.notice-slot.collapsed { grid-template-rows: 0fr; }
+.notice-inner { min-height: 0; overflow: hidden; }
+.notice-slot .warn { transition: opacity 320ms ease-in-out, transform 320ms ease-in-out; }
+.notice-slot.collapsed .warn { opacity: 0; transform: translateY(-6px); }
+.notice-slot.collapsed .notice-inner { visibility: hidden; transition: visibility 0s linear 320ms; }
+.restore-slot { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 320ms ease-in-out; }
+.restore-slot.open { grid-template-rows: 1fr; }
+.restore-inner { min-height: 0; overflow: hidden; }
+.restore-inner .notice-restore { opacity: 0; visibility: hidden; transition: opacity 200ms ease-out, visibility 0s linear 200ms; }
+.restore-slot.open .restore-inner .notice-restore { opacity: 1; visibility: visible; transition: opacity 260ms ease-out 320ms, visibility 0s; }
 
 /* Sheets: slide up with a decelerating curve, backdrop fades; closing slides down (see closeSheet in motion.js) */
 dialog.sheet::backdrop { opacity: var(--bd, 1); transition: opacity 120ms linear; }

@@ -45,8 +45,8 @@ export function renderDashboard(el, model, payslips = [], ui = {}) {
     : '';
   const advice = ui.advice;
   const dismissed = !!latest && !!advice?.applicable && isNoticeDismissed(noticeSignature(latest));
-  const pill = latest && advice?.applicable && !dismissed
-    ?`<button class="pill-head" type="button" data-action="fixer">${ICON('<path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/>', 14)}Tax card needs updating</button>`
+  const pill = latest && advice?.applicable
+    ? `<button class="pill-head${dismissed ? ' is-off' : ''}" type="button" data-action="fixer">${ICON('<path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/>', 14)}Tax card needs updating</button>`
     : '';
   const header = `<header class="top"><button class="menu-btn" type="button" data-action="menu" aria-label="Open menu">${MENU}</button><div>
       <h1 class="h1">Your ${year}</h1>
@@ -128,18 +128,18 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
       <span><i class="sw" style="background:var(--forecast-a)"></i>Forecast ${fmtEur(yearEndForecastGross)}</span>
       <span class="lim"><i class="sw" style="width:2px;height:12px;background:var(--red)"></i>Limit ${fmtEur(tc.limit)}</span></div></div>`;
 
+  // Both slots are always in the page while the notice applies, so dismissing and restoring only flip classes.
   let warn = '';
-  if (advice?.applicable && !dismissed) {
+  if (advice?.applicable) {
     const title = over ? 'Over the tax card limit' : `Limit runs out in ${MONTHS[tc.runsOutMonth - 1]}`;
     const extraLine = over
       ? 'Extra tax is already being withheld.'
       : `About ${about(advice.extraWithholdingVsBase)} more tax withheld by year end.`;
-    warn = `<section class="warn"><button class="warn-x" type="button" data-action="dismiss-notice" aria-label="Dismiss tax card notice">×</button><div class="warn-ico">${WARN}</div><div><p class="warn-t">${title}</p>
+    warn = `<div class="notice-slot${dismissed ? ' collapsed' : ''}" id="notice-slot"><div class="notice-inner"><section class="warn"><button class="warn-x" type="button" data-action="dismiss-notice" aria-label="Dismiss tax card notice">×</button><div class="warn-ico">${WARN}</div><div><p class="warn-t">${title}</p>
       <p class="warn-b">${extraLine} ${refundSentence(advice.projectedRefund)}</p>
-      <button class="warn-btn" type="button" data-action="fixer">See the tax card fixer ›</button></div></section>`;
-  } else if (advice?.applicable && dismissed) {
+      <button class="warn-btn" type="button" data-action="fixer">See the tax card fixer ›</button></div></section></div></div>`;
     // Hidden by the user: the fixer and the Vero link stay reachable from here.
-    warn = `<button class="notice-restore" type="button" data-action="show-notice">Show tax card notice</button>`;
+    warn += `<div class="restore-slot${dismissed ? ' open' : ''}" id="restore-slot"><div class="restore-inner"><button class="notice-restore" type="button" data-action="show-notice">Show tax card notice</button></div></div>`;
   }
 
   const hero = `<section class="card hero">${gauge}${ringLeft}${heroL}${ratesPhone}<div class="barWrap">${bar}${warn}</div></section>`;
