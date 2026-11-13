@@ -5,15 +5,22 @@ import { fmtEur, fmtEur2 } from './format.js';
 export const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const phone = () => matchMedia('(max-width: 899px)').matches;
 
-// ---------- body lock: keeps the page behind a modal still (iOS ignores overflow:hidden on body) ----------
+// ---------- scroll lock: keeps the page behind a modal still ----------
+// The page scrolls the document (the root element), so the lock only stops that from scrolling. It must not move the
+// body (position: fixed with a negative top): that collapses the document, the browser resets the scroll position,
+// and the page visibly jumps (measured: 266 px to 0 px on the dashboard). overflow: hidden on the root keeps the
+// document height and the scroll position.
 let locks = 0;
-let scrollY = 0;
-let bodyStyle = null;
+let rootStyle = null;
 function lockBody() {
   if (locks++ > 0) return;
-  scrollY = window.scrollY;
-  bodyStyle = document.body.getAttribute('style');
-  Object.assign(document.body.style, { position: 'fixed', top: `-${scrollY}px`, left: '0', right: '0', width: '100%', overflow: 'hidden' });
+  rootStyle = document.documentElement.getAttribute('style');
+  document.documentElement.style.overflow = 'hidden';
+}
+function unlockBody() {
+  if (--locks > 0) return;
+  if (rootStyle === null) document.documentElement.removeAttribute('style');
+  else document.documentElement.setAttribute('style', rootStyle);
 }
 // Each modal locks once and unlocks once, whichever close path runs first (our own, or the close event).
 const locked = new WeakSet();
@@ -21,12 +28,6 @@ function endLock(dlg) {
   if (!locked.has(dlg)) return;
   locked.delete(dlg);
   unlockBody();
-}
-function unlockBody() {
-  if (--locks > 0) return;
-  if (bodyStyle === null) document.body.removeAttribute('style');
-  else document.body.setAttribute('style', bodyStyle);
-  window.scrollTo(0, scrollY);
 }
 
 // The panel of a modal: the form of a sheet, or the drawer's panel.
