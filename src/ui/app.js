@@ -1,7 +1,6 @@
 import { openStore } from '../core/store.js';
 import { buildDashboard, computeOpeningGross } from '../core/calc.js';
 import { taxCardAdvice } from '../core/advice.js';
-import { yearSummary } from '../core/summary.js';
 import { coveredMonths } from '../core/util.js';
 import { renderDashboard, slipDetailHtml } from './dashboard.js';
 import { addFiles } from './add-payslip.js';
@@ -127,9 +126,6 @@ async function render() {
       selected: state.selected,
       hasOpening: !!stored,
       advice: state.advice,
-      // Year totals use the same derived opening as the dashboard, so the numbers agree.
-      summary: yearSummary(year, payslips, opening),
-      partialNetTax: !!opening && (opening.net == null || opening.tax == null),
     });
     drawer.querySelector('.drawer-body').innerHTML = navHtml;
     const slot = root.querySelector('#notice-slot');

@@ -4,6 +4,7 @@ import { breakdown } from '../core/calc.js';
 import { comparePayslips } from '../core/compare.js';
 import { refundSentence } from './fixer.js';
 import { noticeSignature, isNoticeDismissed } from './notice.js';
+import { round2 } from '../core/util.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];
@@ -24,7 +25,7 @@ const paidOn = (iso) => {
 const monthOf = (period) => Number(period.split('/')[0]);
 
 // renderDashboard(el, model, payslips, ui). payslips are ascending (store order).
-// ui: { years, yearCounts, selected, hasOpening, advice (TaxCardAdvice|null), summary (yearSummary|null), partialNetTax }.
+// ui: { years, yearCounts, selected, hasOpening, advice (TaxCardAdvice|null) }.
 // Taps are data-action attributes, handled in app.js.
 export function renderDashboard(el, model, payslips = [], ui = {}) {
   const { year, taxCard: tc, series, monthsCovered, monthsInYear, missingMonths, latestPeriod } = model;
@@ -62,19 +63,43 @@ export function renderDashboard(el, model, payslips = [], ui = {}) {
 }
 
 // Year totals, after the stat tiles. The print button prints only this card (see the print rules in styles.css).
-function yearTotalsHtml(year, s, through, partialNetTax) {
-  if (!s) return '';
-  const row = (label, value, partial = false) => `<div class="yt-row"><span>${label}${partial ? ' <span class="partial-tag">partial</span>' : ''}</span><span>${value}</span></div>`;
+// The figures of the payslips the user has added, summed here (not the opening balance): each row is complete for
+// the months it covers, so nothing is shown as partial.
+export function addedTotals(payslips) {
+  const sum = (k) => round2(payslips.reduce((t, p) => t + (p[k] ?? 0), 0));
+  const line = (code) => round2(payslips.reduce((t, p) => t + p.lines.filter((l) => l.code === code).reduce((u, l) => u + l.amount, 0), 0));
+  return {
+    count: payslips.length, gross: sum('gross'), tax: sum('tax'), tyel: sum('tyel'), unemployment: sum('unemployment'),
+    net: sum('net'), phone: line('304'), lunch: Math.abs(line('920')),
+  };
+}
+
+// The one calm prompt for the months before the first payslip (the after-tax totals need their tax and net).
+function earlierPrompt(through, cls = '') {
+  const range = monthRange(through);
+  if (!range) return '';
+  return `<section class="prompt-card ${cls}">
+    <div class="pc-text"><p class="pc-t">After-tax totals need ${range}</p><p class="pc-b">Add tax and net from your last payslip before these, once.</p></div>
+    <button class="pc-btn" type="button" data-action="opening">Add ${range}</button>
+  </section>`;
+}
+
+function yearTotalsHtml(year, payslips, through, hasOpening) {
+  if (!payslips.length) return '';
+  const t = addedTotals(payslips);
+  const row = (label, value) => `<div class="yt-row"><span>${label}</span><span>${value}</span></div>`;
   return `<section class="card ytotals">
     <div class="card-h"><h2>Year totals</h2><span class="sm">${year}</span></div>
+    <p class="yt-scope">From your ${t.count} payslip${t.count === 1 ? '' : 's'}</p>
     <p class="yt-print-head">Palkka · Year ${year}</p>
-    ${row('Net pay', fmtEur(s.net), partialNetTax)}
-    ${row('Tax withheld', fmtEur(s.tax), partialNetTax)}
-    ${row('Pension (TyEL)', fmtEur2(s.tyel), !s.tyelComplete)}
-    ${row('Unemployment insurance', fmtEur2(s.unemployment), !s.tyelComplete)}
-    ${row('Phone benefit', fmtEur2(s.phoneBenefit))}
-    ${row('Lunch deduction', fmtEur2(s.lunchDeduction))}
-    ${s.tyelComplete ? '' : `<p class="yt-note">${monthRange(through) ?? 'Earlier months'} not included in the pension and unemployment totals. <button class="linkish" type="button" data-action="opening">Add them in the opening balance ›</button></p>`}
+    ${row('Gross, before tax', fmtEur(t.gross))}
+    ${row('Tax withheld', fmtEur(t.tax))}
+    ${row('Pension (TyEL)', fmtEur2(t.tyel))}
+    ${row('Unemployment insurance', fmtEur2(t.unemployment))}
+    ${row('Net pay', fmtEur(t.net))}
+    ${row('Phone benefit', fmtEur2(t.phone))}
+    ${row('Lunch deduction', fmtEur2(t.lunch))}
+    ${!hasOpening ? earlierPrompt(through, 'pc-compact') : ''}
     <button class="btn-print no-print" type="button" data-action="print">Print year summary</button>
   </section>`;
 }
@@ -165,7 +190,7 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
     <div class="card-h"><h2>Cumulative pay</h2><span class="sm">Jan–Dec</span></div>
     <div class="chart-legend"><span><i class="lg-line" style="background:var(--blue)"></i>Before tax</span>${netKnown ? '<span><i class="lg-line" style="background:var(--green)"></i>After tax</span>' : ''}<span><i class="lg-line" style="background:none;border-top:2px dotted var(--muted)"></i>Opening / forecast</span></div>
     ${cumulativeChart(series, tc.limit, wide)}
-    ${netKnown ? '' : `<button class="hint" type="button" data-action="opening">Add tax and net for ${earlierMonths(through)} to see after-tax</button>`}
+    ${netKnown ? '' : earlierPrompt(through)}
     <p class="chart-note">${caption}</p>
   </section>`;
 
@@ -187,7 +212,7 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
   const slips = `<section class="card slips slips-main"><div class="card-h"><h2>Payslips <span class="sm">· ${monthsCovered} of ${monthsInYear}</span></h2></div>${listHtml(payslips, model.missingMonths, through, ui)}</section>`;
   const detailOpen = !!ui.selected && payslips.some((p) => p.period === ui.selected);
   const detail = `<div class="detail-wrap${detailOpen ? ' open' : ''}" id="detail-wrap"><div class="detail-inner">${slipDetailHtml(payslips, ui)}</div></div>`;
-  return `${hero}${tiles}${yearTotalsHtml(year, ui.summary, through, ui.partialNetTax)}<div class="split">${chart}${where}</div>${slips}${detail}`;
+  return `${hero}${tiles}${yearTotalsHtml(year, payslips, through, !!ui.hasOpening)}<div class="split">${chart}${where}</div>${slips}${detail}`;
 }
 
 // The navigation shared by the Mac sidebar and the phone drawer: year, payslips, add.
@@ -205,12 +230,12 @@ function listHtml(payslips, missing, through, ui) {
   const rows = [
     ...payslips.map((p) => {
       const cmp = comparePayslips(payslips, p.period);
-      const chip = cmp
+      const chip = cmp && Math.abs(cmp.netDelta) >= 0.005
         ? `<span class="chip ${cmp.netDelta >= 0 ? 'up' : 'down'}">${fmtSigned(cmp.netDelta)}</span>`
         : '';
       return { m: p.month, html: `<button class="row${p.period === ui.selected ? ' on' : ''}" type="button" data-action="pick" data-period="${esc(p.period)}"><span><span class="n" style="display:block">${MONTHS[p.month - 1]}</span><span class="s">${paidOn(p.payDate)}</span></span><span class="row-r">${chip}<span class="pay-amt">${fmtEur2(p.net)}</span></span></button>` };
     }),
-    ...missing.filter((m) => m > through).map((m) => ({ m, html: `<div class="row sub"><span><span class="n" style="display:block">${MONTHS[m - 1]}</span><span class="s">No payslip</span></span><span class="pay-amt">Missing</span></div>` })),
+    ...missing.filter((m) => m > through).map((m) => ({ m, html: `<button class="row missing" type="button" data-action="add" aria-label="Add a payslip for ${MONTHS[m - 1]}"><span class="rlead"><span class="mk" aria-hidden="true"></span><span><span class="n" style="display:block">${MONTHS[m - 1]}</span><span class="s">No payslip</span></span></span></button>` })),
   ].sort((a, b) => b.m - a.m);
   if (through >= 1) {
     const label = monthRange(through);
@@ -218,7 +243,7 @@ function listHtml(payslips, missing, through, ui) {
       m: 0,
       html: ui.hasOpening
         ? `<button class="row sub" type="button" data-action="opening"><span><span class="n" style="display:block">${label}</span><span class="s">Opening balance</span></span><span class="pay-amt">›</span></button>`
-        : `<button class="row todo" type="button" data-action="opening"><span><span class="n" style="display:block">${label}</span><span class="s">Add opening balance</span></span><span class="pay-amt">›</span></button>`,
+        : `<button class="row sub" type="button" data-action="opening"><span><span class="n" style="display:block">${label}</span><span class="s">No opening balance</span></span><span class="pay-amt">›</span></button>`,
     });
   }
   return rows.map((r) => r.html).join('');
@@ -231,11 +256,12 @@ export function slipDetailHtml(payslips, ui) {
   const cmp = comparePayslips(payslips, selected.period);
   const compare = cmp
     ? `<p class="lbl">Compared with ${MONTHS[monthOf(cmp.prevPeriod) - 1]}</p>
-       <div class="line strong"><span>Net pay</span><span class="${cmp.netDelta >= 0 ? 'up' : 'down'}">${fmtSigned(cmp.netDelta)}</span></div>
+       <div class="line strong"><span>Net pay</span>${Math.abs(cmp.netDelta) < 0.005 ? '<span style="color:var(--sub)">No change</span>' : `<span class="${cmp.netDelta > 0 ? 'up' : 'down'}">${fmtSigned(cmp.netDelta)}</span>`}</div>
        ${cmp.rows.map((r) => `<div class="line"><span>${esc(r.code)} ${esc(r.name)}</span><span class="${r.delta >= 0 ? 'up' : 'down'}">${fmtSigned(r.delta)}</span></div>`).join('')}`
     : `<p class="lbl">No earlier payslip to compare with</p>`;
   return `<section class="card slip-detail" id="slip-detail">
-    <div class="card-h"><h2>${MONTHS[selected.month - 1]} ${selected.year}</h2><span class="sm">${paidOn(selected.payDate)}</span></div>
+    <div class="card-h"><h2>${MONTHS[selected.month - 1]} ${selected.year}</h2></div>
+    <p class="src">${paidOn(selected.payDate)}${selected.source ? ` · <span title="${esc(selected.source)}">${esc(selected.source)}</span>` : ''}</p>
     ${compare}
     <p class="lbl detail-h">Pay lines</p>
     ${selected.lines.map((l) => `<div class="line"><span>${esc(l.code)} ${esc(l.name)}</span><span>${fmtEur2(l.amount)}</span></div>`).join('')}

@@ -1,14 +1,16 @@
-// Turns picked files into saved records. Nothing is stored until the user confirms a sheet.
+// Turns picked files into saved records. Nothing is stored until the user confirms it.
 // One pick may hold many files (Select All in the payslip folder): every PDF is read first, then each payslip is
-// decided by its period. Stored periods are skipped silently; only new ones open a confirm sheet, oldest first.
+// decided by its period. Stored periods are skipped silently. One new payslip opens its confirm sheet; several open
+// a review sheet, where each can be edited and "Save all" saves the ones whose numbers match.
 import { itemsFromPdf } from '../core/pdf-items.js';
 import { parsePayslip, NotAPayslipError, parseFiNumber } from '../core/parse.js';
 import { parseOpening } from '../core/opening-file.js';
 import { askFields, checks } from './sheet.js';
 import { saveOpening } from './opening.js';
-import { plain, fmtEur2, fmtSigned } from './format.js';
+import { plain, fmtEur2, fmtSigned, esc } from './format.js';
 import { reconcile } from '../core/summary.js';
 import { comparePayslips } from '../core/compare.js';
+import { openSheet, attachSheetMotion } from './motion.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];
@@ -42,18 +44,25 @@ export async function addFiles(files, { store, notify }) {
   }
   stats.skipped += read.filter((r) => r.error).length;
 
-  // 2. Decide per payslip by period. A single file that is already stored is replaced after confirming.
+  // 2. Decide per payslip by period. Several picked: stored or repeated periods are up to date; the rest are new.
+  //    One picked: it is confirmed as today, and replaces a stored payslip with the same period.
   const stored = new Set((await store.listPayslips()).map((p) => p.period));
+  const queue = [];
+  const seen = new Set();
   for (const r of readable) {
     const exists = stored.has(r.parsed.period);
-    if (multi && exists) { stats.upToDate++; continue; }
-    const saved = await confirmPayslip(r.file, r.parsed, { store, replace: exists });
-    if (saved) {
-      stored.add(saved.period);
-      stats.added++;
-      single = saved;
-    } else {
-      stats.skipped++;
+    if (multi && (exists || seen.has(r.parsed.period))) { stats.upToDate++; continue; }
+    seen.add(r.parsed.period);
+    queue.push({ file: r.file, parsed: r.parsed, replace: exists });
+  }
+  if (multi && queue.length > 1) {
+    const result = await reviewPayslips(queue, { store });
+    stats.added += result.saved;
+    stats.skipped += result.skipped;
+  } else {
+    for (const item of queue) {
+      const saved = await confirmPayslip(item.file, item.parsed, { store, replace: item.replace });
+      if (saved) { stats.added++; single = saved; } else stats.skipped++;
     }
   }
 
@@ -74,7 +83,7 @@ export async function addFiles(files, { store, notify }) {
   if (!multi) {
     if (single) {
       const cmp = comparePayslips(await store.listPayslips(single.year), single.period);
-      const change = cmp ? ` · net ${fmtSigned(cmp.netDelta)} vs ${MONTHS[Number(cmp.prevPeriod.split('/')[0]) - 1]}` : '';
+      const change = cmp && Math.abs(cmp.netDelta) >= 0.005 ? ` · net ${fmtSigned(cmp.netDelta)} vs ${MONTHS[Number(cmp.prevPeriod.split('/')[0]) - 1]}` : '';
       notify(`Saved payslip ${single.period}${change}`);
     }
     return;
@@ -94,6 +103,39 @@ async function readPayslip(file) {
   } catch (e) {
     return { file, error: e instanceof NotAPayslipError ? 'notPayslip' : 'unreadable' };
   }
+}
+
+// The form values a parsed payslip starts from (the same fields as the confirm sheet).
+function valuesFromParsed(parsed) {
+  const t = parsed.taxCard ?? {};
+  return {
+    gross: plain(parsed.gross), tax: plain(parsed.tax), tyel: plain(parsed.tyel), unemployment: plain(parsed.unemployment),
+    other: '', net: plain(parsed.net), period: parsed.period ?? '', taxableIncome: plain(parsed.taxableIncome),
+    basePct: plain(t.basePct), extraPct: plain(t.extraPct), limit: plain(t.limit), cumulativeIncome: plain(t.cumulativeIncome),
+    holidayDaysLeft: plain(parsed.holidayDaysLeft),
+  };
+}
+
+// The stored record from form values. Throws if a required amount is not a number.
+function buildPayslip(v, parsed, source) {
+  const [month, year] = v.period.split('/').map(Number);
+  const n = (k) => parseFiNumber(v[k]);
+  return {
+    period: v.period,
+    year,
+    month,
+    payDate: parsed.payDate,
+    gross: n('gross'),
+    net: n('net'),
+    tax: n('tax'),
+    tyel: n('tyel'),
+    unemployment: n('unemployment'),
+    taxableIncome: n('taxableIncome'),
+    taxCard: { basePct: n('basePct'), extraPct: n('extraPct'), limit: n('limit'), cumulativeIncome: n('cumulativeIncome') },
+    holidayDaysLeft: v.holidayDaysLeft ? n('holidayDaysLeft') : null,
+    lines: parsed.lines ?? [],
+    source, // the file it was read from (shown in the breakdown)
+  };
 }
 
 // The confirm sheet for one payslip. Resolves to { period, year, month } once saved, or null when cancelled.
@@ -126,25 +168,78 @@ async function confirmPayslip(file, parsed, { store, replace }) {
     derive: (vals) => ({ other: otherDeductions(vals) }),
   });
   if (!v) return null;
+  const payslip = buildPayslip(v, parsed, file.name);
+  await store.putPayslip(payslip);
+  return { period: payslip.period, year: payslip.year, month: payslip.month };
+}
 
-  const [month, year] = v.period.split('/').map(Number);
-  const n = (k) => parseFiNumber(v[k]);
-  await store.putPayslip({
-    period: v.period,
-    year,
-    month,
-    payDate: parsed.payDate,
-    gross: n('gross'),
-    net: n('net'),
-    tax: n('tax'),
-    tyel: n('tyel'),
-    unemployment: n('unemployment'),
-    taxableIncome: n('taxableIncome'),
-    taxCard: { basePct: n('basePct'), extraPct: n('extraPct'), limit: n('limit'), cumulativeIncome: n('cumulativeIncome') },
-    holidayDaysLeft: v.holidayDaysLeft ? n('holidayDaysLeft') : null,
-    lines: parsed.lines ?? [],
+// A payslip is ready for "Save all" when every amount was read and its lines add up (reconcile).
+function rowStatus(parsed) {
+  const f = { gross: parsed.gross, tax: parsed.tax, tyel: parsed.tyel, unemployment: parsed.unemployment, net: parsed.net };
+  if (Object.values(f).some((x) => typeof x !== 'number')) return { ok: false, text: 'Some numbers could not be read' };
+  const r = reconcile(f, parsed.lines ?? []);
+  return r.ok ? { ok: true, text: 'Numbers match net pay' } : { ok: false, text: `Off by ${fmtEur2(Math.abs(r.diff))}` };
+}
+
+// Several new payslips: one review sheet. "Save all" saves the ones that match; "Edit" opens that payslip's confirm
+// sheet and returns here. Resolves to { saved, skipped } where skipped counts what was left unsaved.
+async function reviewPayslips(queue, { store }) {
+  let rows = queue.map((item) => ({ ...item, status: rowStatus(item.parsed) }));
+  let saved = 0;
+  while (rows.length) {
+    const choice = await reviewSheet(rows);
+    if (choice === 'all') {
+      for (const r of rows.filter((x) => x.status.ok)) {
+        await store.putPayslip(buildPayslip(valuesFromParsed(r.parsed), r.parsed, r.file.name));
+        saved++;
+      }
+      rows = rows.filter((x) => !x.status.ok); // what is left is the rows that were not saved (need an Edit)
+      break;
+    }
+    if (!choice || choice === 'cancel') break;
+    const i = Number(choice.slice(5));
+    const r = rows[i];
+    const done = await confirmPayslip(r.file, r.parsed, { store, replace: r.replace });
+    if (done) { saved++; rows = rows.filter((_, j) => j !== i); }
+  }
+  return { saved, skipped: rows.length };
+}
+
+// The review sheet. Resolves with 'all', 'cancel', 'edit:<index>', or null when dismissed.
+function reviewSheet(rows) {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'sheet review';
+    const okN = rows.filter((r) => r.status.ok).length;
+    const list = rows.map((r, i) => {
+      const p = r.parsed;
+      return `<div class="rv-row${r.status.ok ? '' : ' check'}">
+        <div class="rv-main"><p class="rv-m">${MONTHS[p.month - 1]} ${p.year}</p><p class="rv-f">${esc(r.file.name)}</p></div>
+        <div class="rv-end"><p class="rv-n">${p.net == null ? '–' : fmtEur2(p.net)}</p><p class="rv-s">${esc(r.status.text)}</p></div>
+        <button class="rv-edit" type="submit" value="edit:${i}">Edit</button>
+      </div>`;
+    }).join('');
+    dlg.innerHTML = `<form method="dialog">
+      <div class="grab"></div>
+      <div class="sh-head"><div class="sh-ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></div>
+        <div><h2>Review ${rows.length} payslips</h2><p>Check each one, then save</p></div></div>
+      <div class="rv-list">${list}</div>
+      <div class="acts"><button class="add" type="submit" value="all"${okN ? '' : ' disabled'}>Save all (${okN})</button><button class="ghost" type="submit" value="cancel">Cancel</button></div>
+    </form>`;
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      const value = dlg.returnValue || null;
+      dlg.remove();
+      resolve(value);
+    };
+    dlg.addEventListener('close', settle);
+    dlg.addEventListener('palkka-closed', settle);
+    document.body.append(dlg);
+    attachSheetMotion(dlg);
+    openSheet(dlg);
   });
-  return { period: v.period, year, month };
 }
 
 // Live check on the confirm sheet. Shows the rule's result; saving stays allowed either way.

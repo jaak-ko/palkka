@@ -72,6 +72,7 @@ function closeNow(dlg) {
 // Closes with the slide-out (or fade on wide) first. Runs once; the close event then fires as usual.
 export function closeSheet(dlg, value = 'cancel') {
   if (dlg.dataset.closing) return;
+  if (dlg.classList.contains('drawer')) return closeDrawer(dlg, value);
   dlg.dataset.closing = '1';
   dlg.returnValue = value;
   if (reducedMotion() || !dlg.open) { closeNow(dlg); return; }
@@ -81,6 +82,28 @@ export function closeSheet(dlg, value = 'cancel') {
   const finish = () => { if (!done) { done = true; closeNow(dlg); } };
   panel?.addEventListener('animationend', (e) => { if (e.target === panel) finish(); }, { once: true });
   setTimeout(finish, 450); // fallback if the animation did not run
+}
+
+// The drawer closes from wherever it is (a tap, Escape, a swipe): the panel moves on transform only, from its current
+// position, and the backdrop fades in the same frame. The dialog is removed when the transition ends, not before.
+function closeDrawer(dlg, value) {
+  if (dlg.dataset.closing) return;
+  dlg.dataset.closing = '1';
+  dlg.returnValue = value;
+  if (reducedMotion() || !dlg.open) { closeNow(dlg); return; }
+  const panel = dlg.querySelector('.drawer-panel');
+  const current = getComputedStyle(panel).transform; // where the panel is now (a swipe may have moved it)
+  panel.style.animation = 'none';
+  panel.style.transition = 'none';
+  panel.style.transform = current === 'none' ? 'translateX(0px)' : current;
+  void panel.offsetWidth; // the current position is the start of the transition
+  panel.style.transition = 'transform 260ms cubic-bezier(.4, 0, 1, 1)';
+  panel.style.transform = 'translateX(-100%)';
+  dlg.style.setProperty('--bd', '0'); // backdrop fades (see the drawer's ::backdrop transition)
+  let done = false;
+  const finish = () => { if (!done) { done = true; closeNow(dlg); } };
+  panel.addEventListener('transitionend', (e) => { if (e.target === panel && e.propertyName === 'transform') finish(); }, { once: true });
+  setTimeout(finish, 340); // fallback if no transition ran
 }
 
 // Gives a modal its gestures: backdrop tap, Escape, form submit (sheets), and the swipe (see attachSwipe).
@@ -162,10 +185,11 @@ export function attachSwipe(dlg, panel, { axis = 'y' } = {}) {
       if (!dragging) return;
       dragging = false;
       if (d > 90 || v > 0.5) {
+        if (isX) { closeSheet(dlg, 'cancel'); return; } // the drawer: the same code path as a tap
         if (dlg.dataset.closing) return;
         dlg.dataset.closing = '1';
         panel.style.transition = 'transform 220ms cubic-bezier(.4,0,1,1)';
-        apply(isX ? panel.offsetWidth : window.innerHeight);
+        apply(window.innerHeight);
         setTimeout(() => { dlg.returnValue = 'cancel'; closeNow(dlg); }, 230);
       } else {
         panel.style.transition = 'transform 220ms cubic-bezier(.2,.8,.2,1)';

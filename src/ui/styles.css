@@ -500,7 +500,7 @@ dialog.drawer {
   position: fixed; inset: 0 auto 0 0; margin: 0; height: 100%; max-height: 100%; width: min(84vw, 320px); max-width: none;
   border: 0; padding: 0; background: transparent; color: var(--ink); font: inherit;
 }
-dialog.drawer::backdrop { background: var(--scrim); opacity: var(--bd, 1); transition: opacity 120ms linear; }
+dialog.drawer::backdrop { background: var(--scrim); opacity: var(--bd, 1); transition: opacity 260ms ease-in; }
 dialog.drawer[open]::backdrop { animation: bd-in 300ms ease-out backwards; }
 dialog.drawer.closing::backdrop { animation: bd-out 260ms ease-in forwards; }
 .drawer-panel {
@@ -509,7 +509,6 @@ dialog.drawer.closing::backdrop { animation: bd-out 260ms ease-in forwards; }
   overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
 }
 dialog.drawer[open] .drawer-panel { animation: drawer-in 380ms cubic-bezier(.16, 1, .3, 1) backwards; }
-dialog.drawer.closing .drawer-panel { animation: drawer-out 260ms cubic-bezier(.4, 0, 1, 1) forwards; }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; touch-action: none; }
 .drawer-title { font-family: var(--serif); font-size: 20px; font-weight: 600; outline: none; }
 .drawer-close {
@@ -546,12 +545,6 @@ dialog.drawer.closing .drawer-panel { animation: drawer-out 260ms cubic-bezier(.
 .ring-left b { font-family: var(--serif); font-weight: 500; font-size: 17px; }
 @media (min-width: 900px) { .ring-left { display: none; } }
 
-/* Year totals: "partial" is a tag next to the label */
-.partial-tag {
-  display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; vertical-align: 1px;
-  font-size: 11px; font-weight: 600; color: var(--red-ink); background: var(--red-bg);
-}
-.ytotals .partial-tag { font-size: 11px; }
 
 /* Fixer: the Vero link is a full-width primary button */
 .fx-link { flex: none; height: 52px; text-decoration: none; font-size: 16px; }
@@ -564,3 +557,39 @@ body::before {
   height: env(safe-area-inset-top, 0px); background: var(--bg);
 }
 @media print { body::before { display: none; } }
+
+/* Calm prompt card: the months before the first payslip (after-tax totals need their tax and net) */
+.prompt-card { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 14px 16px; border-radius: 18px; background: var(--tile); border: 1px solid var(--line); }
+.prompt-card.pc-compact { margin-top: 10px; }
+.pc-text { flex: 1; min-width: 0; }
+.pc-t { font-size: 14px; font-weight: 600; }
+.pc-b { margin-top: 2px; font-size: 13px; color: var(--sub); }
+.pc-btn { flex: none; height: 40px; padding: 0 14px; border: 0; border-radius: 20px; background: var(--pill-bg); color: var(--pill-ink); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+
+/* Year totals: what the added payslips add up to */
+.yt-scope { margin: -4px 0 6px; font-size: 12px; color: var(--muted); }
+
+/* The breakdown: the file it was read from and the pay date, one line */
+.src { margin: 2px 0 10px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.src span { color: var(--sub); }
+
+/* Months with no payslip: neutral. A hollow circle marks it; the whole row adds that month. */
+.row.missing { width: 100%; }
+.row.missing .rlead { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.row.missing .mk { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--muted); }
+.row.missing .s { color: var(--muted); font-size: 12px; }
+.row.missing:hover, .row.missing:focus-visible { background: var(--row); outline: none; }
+
+/* Review sheet: several new payslips */
+.review .rv-list { display: flex; flex-direction: column; gap: 8px; }
+.rv-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: var(--tile); border: 1px solid var(--line); }
+.rv-row.check { background: var(--warn-bg); border-color: var(--warn-line); }
+.rv-main { flex: 1; min-width: 0; }
+.rv-m { font-size: 14px; font-weight: 600; }
+.rv-f { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rv-end { flex: none; text-align: right; }
+.rv-n { font-family: var(--serif); font-size: 16px; font-variant-numeric: tabular-nums; }
+.rv-s { font-size: 12px; color: var(--muted); }
+.rv-row.check .rv-s { color: var(--warn-ink); }
+.rv-edit { flex: none; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--ghost-line); background: var(--card); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+.review .add:disabled { opacity: .4; }
