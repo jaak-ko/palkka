@@ -2,7 +2,6 @@ import { fmtEur, fmtEur2, fmtPct, fmtSigned, about, esc, monthRange, earlierMont
 import { cumulativeChart } from './charts.js';
 import { breakdown } from '../core/calc.js';
 import { comparePayslips } from '../core/compare.js';
-import { keepOfHundred } from '../core/summary.js';
 import { refundSentence } from './fixer.js';
 import { noticeSignature, isNoticeDismissed } from './notice.js';
 
@@ -80,10 +79,11 @@ function yearTotalsHtml(year, s, through, partialNetTax) {
   </section>`;
 }
 
-function ratesHtml(keep, tc) {
+function ratesHtml(tc) {
+  if (tc.basePct == null) return '';
   return `<div class="rates">
-    <div class="rate"><p class="k">You keep, below the limit</p><p class="v" data-count="${keep.belowLimit}" data-fmt="eur2">${fmtEur2(keep.belowLimit)}</p><p class="rate-sub">of each 100 € · rate ${fmtPct(tc.basePct)}</p></div>
-    <div class="rate"><p class="k">You keep, above the limit</p><p class="v" style="color:var(--red)" data-count="${keep.aboveLimit}" data-fmt="eur2">${fmtEur2(keep.aboveLimit)}</p><p class="rate-sub">of each 100 € · rate ${fmtPct(tc.extraPct)}</p></div>
+    <div class="rate"><p class="k">Current tax rate</p><p class="v">${fmtPct(tc.basePct)}</p></div>
+    <div class="rate"><p class="k">Next rate, above the limit</p><p class="v" style="color:var(--red)">${fmtPct(tc.extraPct)}</p></div>
   </div>`;
 }
 
@@ -93,7 +93,6 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
   const over = tc.overBy > 0;
   const netKnown = series.every((s) => s.cumNet != null) && totals.net != null;
   const advice = ui.advice;
-  const keep = latest ? keepOfHundred(latest) : null;
 
   // Ring (phone) and bar (wide) show the same used/limit/forecast.
   const used = tc.used;
@@ -112,9 +111,9 @@ function mainBody({ model, payslips, ui, latest, opening, through, dismissed }) 
   const ringLeft = `<p class="ring-left">${over ? `Over by <b>${fmtEur(tc.overBy)}</b> on your tax card` : `<b>${fmtEur(left)}</b> left on your tax card`}</p>`;
   const heroL = `<div class="heroL"><p class="lbl">Left on your tax card</p><p class="big" data-count="${left}" data-fmt="eur">${fmtEur(left)}</p>
     <p class="rate-line">Rate <b>${fmtPct(tc.basePct)}</b> now, <span class="r">${fmtPct(tc.extraPct)}</span> above the limit</p>
-    ${keep ? ratesHtml(keep, tc) : ''}</div>`;
+    ${ratesHtml(tc)}</div>`;
 
-  const ratesPhone = keep ? ratesHtml(keep, tc) : '';
+  const ratesPhone = ratesHtml(tc);
 
   // Wide bar: scale so the limit sits at 88.5 % of the track, as in the design.
   const scale = Math.max(tc.limit * 1.13, yearEndForecastGross * 1.01);
